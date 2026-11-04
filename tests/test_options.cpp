@@ -430,6 +430,15 @@ TEST(monte_carlo_rounds_to_even_samples_for_antithetic) {
   CHECK_EQ(result.effective_samples, 10'000u);
 }
 
+TEST(monte_carlo_handles_a_two_path_run) {
+  const OptionSpec spec =
+      make_spec(OptionType::Call, 100, 100, 1.0, 0.2, 0.05);
+  const auto result = monte_carlo_price(spec, 2, 1);
+  CHECK(std::isfinite(result.price));
+  CHECK_EQ(result.effective_samples, 2u);
+  CHECK_NEAR(result.standard_error, 0.0, 0.0);
+}
+
 TEST(monte_carlo_rejects_unsupported_inputs) {
   const OptionSpec american = make_spec(OptionType::Call, 100, 100, 1.0, 0.2,
                                         0.05, 0.0, ExerciseStyle::American);

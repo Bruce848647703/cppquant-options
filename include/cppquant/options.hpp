@@ -42,7 +42,6 @@ struct SolverSettings {
   /// Price tolerance used while inverting Black-Scholes.
   double tolerance{1e-10};
   int max_iterations{100};
-  double min_volatility{1e-8};
   double max_volatility{5.0};
 };
 

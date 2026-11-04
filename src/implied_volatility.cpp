@@ -35,8 +35,8 @@ double implied_volatility(const OptionSpec& spec, double market_price,
     throw std::invalid_argument("market price must be finite and non-negative");
   }
   if (!std::isfinite(settings.tolerance) || settings.tolerance <= 0.0 ||
-      settings.max_iterations < 1 || settings.min_volatility < 0.0 ||
-      settings.max_volatility <= settings.min_volatility) {
+      settings.max_iterations < 1 || !std::isfinite(settings.max_volatility) ||
+      settings.max_volatility <= 0.0) {
     throw std::invalid_argument("invalid implied volatility solver settings");
   }
 

@@ -117,7 +117,7 @@ implied volatility (market 10.450584)
   vol          0.200000
 
 monte carlo (200000 paths, antithetic + control variate)
-  price       10.453387  (se 0.008673, 200000 samples)
+  price       10.451654  (se 0.006111, 200000 samples)
 ```
 
 Use `--style american` for the binomial American price. `--no-mc` skips Monte

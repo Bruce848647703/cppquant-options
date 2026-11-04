@@ -100,7 +100,7 @@ MonteCarloResult monte_carlo_price(const OptionSpec& spec, std::size_t paths,
 
   const std::size_t samples = sample_payoffs.size();
   std::vector<double> adjusted = sample_payoffs;
-  if (control_variate) {
+  if (control_variate && samples >= 2) {
     double mean_payoff = 0.0;
     double mean_control = 0.0;
     for (std::size_t index = 0; index < samples; ++index) {
