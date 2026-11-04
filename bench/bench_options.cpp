@@ -1,0 +1,159 @@
+#include "cppquant/options.hpp"
+
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <random>
+#include <string>
+#include <vector>
+
+using namespace cppquant;
+
+namespace {
+
+double sink = 0.0;
+
+using Clock = std::chrono::steady_clock;
+
+double seconds_since(Clock::time_point start) {
+  return std::chrono::duration<double>(Clock::now() - start).count();
+}
+
+std::vector<OptionSpec> make_specs(std::size_t count, std::uint64_t seed) {
+  std::mt19937_64 rng(seed);
+  std::vector<OptionSpec> specs;
+  specs.reserve(count);
+
+  for (std::size_t index = 0; index < count; ++index) {
+    OptionSpec spec;
+    spec.type = (index & 1U) != 0 ? OptionType::Put : OptionType::Call;
+    spec.style = ExerciseStyle::European;
+    spec.spot = 50.0 + static_cast<double>(rng() % 151);
+    spec.strike = 50.0 + static_cast<double>(rng() % 151);
+    spec.time_to_expiry = 0.05 + static_cast<double>(rng() % 500) / 100.0;
+    spec.volatility = 0.05 + static_cast<double>(rng() % 80) / 100.0;
+    spec.risk_free_rate = static_cast<double>(rng() % 8) / 100.0;
+    spec.dividend_yield = static_cast<double>(rng() % 5) / 100.0;
+    specs.push_back(spec);
+  }
+
+  return specs;
+}
+
+void run_black_scholes(const std::vector<OptionSpec>& specs,
+                       std::size_t repetitions) {
+  const auto start = Clock::now();
+  std::size_t operations = 0;
+  for (std::size_t repeat = 0; repeat < repetitions; ++repeat) {
+    for (const auto& spec : specs) {
+      const double price = black_scholes_price(spec);
+      const Greeks greeks = black_scholes_greeks(spec);
+      sink += price + greeks.delta + greeks.gamma + greeks.vega + greeks.theta +
+              greeks.rho;
+      ++operations;
+    }
+  }
+  const double seconds = seconds_since(start);
+  std::printf(
+      "black-scholes price+greeks  %10zu opts  %8.1f ns/opt  %6.2f M opts/s\n",
+      operations, seconds * 1e9 / static_cast<double>(operations),
+      static_cast<double>(operations) / seconds / 1e6);
+}
+
+void run_implied_volatility(const std::vector<OptionSpec>& specs,
+                            std::size_t operations) {
+  std::vector<double> prices(specs.size());
+  for (std::size_t index = 0; index < specs.size(); ++index) {
+    prices[index] = black_scholes_price(specs[index]);
+  }
+
+  const auto start = Clock::now();
+  for (std::size_t index = 0; index < operations; ++index) {
+    const std::size_t slot = index % specs.size();
+    sink += implied_volatility(specs[slot], prices[slot]);
+  }
+  const double seconds = seconds_since(start);
+  std::printf(
+      "implied volatility          %10zu opts  %8.1f ns/opt  %6.2f M opts/s\n",
+      operations, seconds * 1e9 / static_cast<double>(operations),
+      static_cast<double>(operations) / seconds / 1e6);
+}
+
+void run_binomial(const OptionSpec& spec, int steps, std::size_t operations) {
+  const auto start = Clock::now();
+  for (std::size_t index = 0; index < operations; ++index) {
+    sink += binomial_price(spec, steps);
+  }
+  const double seconds = seconds_since(start);
+  std::printf("binomial american (%d steps) %8zu opts  %10.1f us/opt\n", steps,
+              operations, seconds * 1e6 / static_cast<double>(operations));
+}
+
+void run_monte_carlo(const OptionSpec& spec, std::size_t paths,
+                     std::size_t runs, std::uint64_t seed) {
+  const auto start = Clock::now();
+  std::size_t total_paths = 0;
+  for (std::size_t index = 0; index < runs; ++index) {
+    const auto result = monte_carlo_price(spec, paths, seed + index);
+    sink += result.price + result.standard_error;
+    total_paths += result.effective_samples;
+  }
+  const double seconds = seconds_since(start);
+  std::printf(
+      "monte carlo (%zu paths)     %10zu runs  %8.2f ms/run  %6.2f M paths/s\n",
+      paths, runs, seconds * 1e3 / static_cast<double>(runs),
+      static_cast<double>(total_paths) / seconds / 1e6);
+}
+
+} // namespace
+
+int main(int argc, char** argv) {
+  std::size_t bs_repetitions = 1000;
+  std::size_t iv_operations = 20'000;
+  int binomial_steps = 500;
+  std::size_t binomial_operations = 200;
+  std::size_t mc_paths = 200'000;
+  std::size_t mc_runs = 20;
+
+  for (int index = 1; index < argc; ++index) {
+    const std::string argument = argv[index];
+    if (argument == "--quick") {
+      bs_repetitions = 50;
+      iv_operations = 1'000;
+      binomial_operations = 20;
+      mc_paths = 50'000;
+      mc_runs = 5;
+    } else if (argument == "--help" || argument == "-h") {
+      std::printf("usage: %s [--quick]\n", argv[0]);
+      return 0;
+    } else {
+      std::fprintf(stderr, "unknown argument: %s\n", argument.c_str());
+      return 2;
+    }
+  }
+
+  std::printf("cppquant-options benchmark\n");
+  std::printf("fixed seeds, release build recommended\n\n");
+
+  const auto specs = make_specs(1024, 7);
+  run_black_scholes(specs, bs_repetitions);
+  run_implied_volatility(specs, iv_operations);
+
+  OptionSpec american;
+  american.type = OptionType::Put;
+  american.style = ExerciseStyle::American;
+  american.spot = 100.0;
+  american.strike = 100.0;
+  american.time_to_expiry = 1.0;
+  american.volatility = 0.2;
+  american.risk_free_rate = 0.05;
+  run_binomial(american, binomial_steps, binomial_operations);
+
+  OptionSpec european = american;
+  european.style = ExerciseStyle::European;
+  run_monte_carlo(european, mc_paths, mc_runs, 42);
+
+  std::printf("\nchecksum: %.6f\n", sink);
+  return 0;
+}
