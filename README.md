@@ -182,7 +182,7 @@ recursion and the variance-reduction details.
 ## Tests
 
 The repository ships a tiny header-only test harness, so the build has no
-external test dependency. The 28 tests cover:
+external test dependency. The 29 tests cover:
 
 - three sets of reference prices and Greeks (ATM, dividends, negative rates);
 - put-call parity and finite-difference checks of every Greek;
