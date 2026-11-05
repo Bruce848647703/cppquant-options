@@ -198,6 +198,13 @@ external test dependency. The 29 tests cover:
 ./build/options_tests implied     # filter by substring
 ```
 
+## Roadmap
+
+The 8-week plan (2026-11-09 to 2027-01-03), milestones and acceptance criteria
+live in [docs/ROADMAP.md](docs/ROADMAP.md). Current and historical numbers are
+in [docs/BENCHMARKS.md](docs/BENCHMARKS.md); user-visible changes are tracked in
+[CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
