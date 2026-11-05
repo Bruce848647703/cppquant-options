@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Raw SVI slice parameterization and constrained Levenberg-Marquardt
+  calibration (`calibrate_svi`).
+- `SviSlice` helpers for total variance, implied volatility by log-moneyness
+  or strike, and basic no-arbitrage checks.
+- SVI tests for parameter recovery, quote round-trips, determinism, narrow
+  strike ranges and invalid input.
+- Dedicated SVI calibration benchmark and mathematical notes.
+
 ### Planned
 
 - **0.2** — SVI slice calibration and a no-arbitrage volatility surface.

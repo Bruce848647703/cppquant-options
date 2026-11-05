@@ -13,6 +13,8 @@ reduction. No third-party dependencies.
   puts, with continuous dividend yield and support for negative rates.
 - **Implied volatility** via a Newton iteration guarded by a bisection
   bracket, with explicit no-arbitrage bounds.
+- **SVI calibration** for one expiry: constrained raw SVI slices fitted by
+  weighted least squares with a Levenberg-Marquardt optimizer.
 - **Binomial CRR tree** for European and American options, including early
   exercise with dividends.
 - **Monte Carlo** for European options with antithetic variates, a
@@ -90,6 +92,25 @@ const auto mc = monte_carlo_price(call, 200'000, /*seed=*/42);
 - `theta` is per year of calendar time.
 - Prices and Greeks use the same units as `spot` and `strike`.
 
+### SVI slice
+
+```cpp
+#include "cppquant/volatility.hpp"
+
+std::vector<VolQuote> quotes = {
+    {90.0, 0.28, 1.0}, {95.0, 0.24, 1.0}, {100.0, 0.22, 1.0},
+    {105.0, 0.23, 1.0}, {110.0, 0.26, 1.0},
+};
+
+const SviFitResult fit = calibrate_svi(100.0, 0.5, quotes);
+const double atm_vol = fit.slice.implied_volatility_for_strike(100.0);
+// fit.rmse, fit.max_error, fit.iterations, fit.converged
+```
+
+The optimizer keeps `b > 0`, `|rho| < 1`, `sigma > 0` and the minimum total
+variance non-negative by construction. See
+[docs/SVI.md](docs/SVI.md) for the parameterization and optimizer details.
+
 ## Command-line pricer
 
 ```bash
@@ -136,6 +157,7 @@ Reference numbers from an Apple M-series laptop (Apple clang 21, `-O3`):
 | --- | ---: | ---: | ---: |
 | Black-Scholes price + Greeks | 1,024,000 options | 80 ns/option | 12.5 M options/s |
 | Implied volatility | 20,000 options | 379 ns/option | 2.6 M options/s |
+| SVI calibration, 25 quotes | 2,000 fits | 17.4 µs/fit | 57.6 k fits/s |
 | Binomial American, 500 steps | 200 prices | 106 µs/price | 9.5 k prices/s |
 | Monte Carlo, 200,000 paths | 20 runs | 3.0 ms/run | 66 M paths/s |
 
@@ -148,6 +170,8 @@ These are indicative; run the benchmark on your own hardware.
   grid of strikes, maturities and volatilities, including negative rates.
 - The CRR tree converges to Black-Scholes as steps increase; for 1,000 steps
   the European error is below `5e-3` on the tested cases.
+- SVI calibration recovers synthetic parameters to about `1e-3` and reproduces
+  a 25-quote smile with implied-vol errors below `1e-9`.
 - Monte Carlo uses the sample standard error of the estimator after variance
   reduction. Antithetic pairs are averaged before estimating the control
   variate, so both techniques reduce the variance of the reported estimator.
@@ -182,7 +206,7 @@ recursion and the variance-reduction details.
 ## Tests
 
 The repository ships a tiny header-only test harness, so the build has no
-external test dependency. The 29 tests cover:
+external test dependency. The 38 tests cover:
 
 - three sets of reference prices and Greeks (ATM, dividends, negative rates);
 - put-call parity and finite-difference checks of every Greek;
@@ -191,7 +215,9 @@ external test dependency. The 29 tests cover:
   rejection;
 - binomial convergence, American early exercise and zero-vol exercise scans;
 - Monte Carlo accuracy, reproducibility, variance reduction and argument
-  validation.
+  validation;
+- SVI formula checks, symmetric and asymmetric parameter recovery, quote
+  round-trips, narrow strike ranges and constraint enforcement.
 
 ```bash
 ./build/options_tests             # all tests

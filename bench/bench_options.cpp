@@ -1,4 +1,5 @@
 #include "cppquant/options.hpp"
+#include "cppquant/volatility.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -80,6 +81,30 @@ void run_implied_volatility(const std::vector<OptionSpec>& specs,
       static_cast<double>(operations) / seconds / 1e6);
 }
 
+void run_svi(std::size_t operations) {
+  const SviParameters truth{0.01, 0.12, -0.4, -0.1, 0.15};
+  const SviSlice slice{100.0, 1.0, truth};
+  std::vector<VolQuote> quotes;
+  quotes.reserve(25);
+  for (int index = 0; index < 25; ++index) {
+    const double k = -1.0 + 2.0 * static_cast<double>(index) / 24.0;
+    const double strike = slice.forward * std::exp(k);
+    quotes.push_back(VolQuote{strike, slice.implied_volatility(k), 1.0});
+  }
+
+  const auto start = Clock::now();
+  for (std::size_t index = 0; index < operations; ++index) {
+    const auto result = calibrate_svi(100.0, 1.0, quotes);
+    sink += result.rmse + result.slice.parameters.b +
+            static_cast<double>(result.iterations);
+  }
+  const double seconds = seconds_since(start);
+  std::printf(
+      "SVI calibration (25 quotes) %10zu fits  %8.1f us/fit  %6.1f k fits/s\n",
+      operations, seconds * 1e6 / static_cast<double>(operations),
+      static_cast<double>(operations) / seconds / 1e3);
+}
+
 void run_binomial(const OptionSpec& spec, int steps, std::size_t operations) {
   const auto start = Clock::now();
   for (std::size_t index = 0; index < operations; ++index) {
@@ -111,6 +136,7 @@ void run_monte_carlo(const OptionSpec& spec, std::size_t paths,
 int main(int argc, char** argv) {
   std::size_t bs_repetitions = 1000;
   std::size_t iv_operations = 20'000;
+  std::size_t svi_operations = 2'000;
   int binomial_steps = 500;
   std::size_t binomial_operations = 200;
   std::size_t mc_paths = 200'000;
@@ -121,6 +147,7 @@ int main(int argc, char** argv) {
     if (argument == "--quick") {
       bs_repetitions = 50;
       iv_operations = 1'000;
+      svi_operations = 200;
       binomial_operations = 20;
       mc_paths = 50'000;
       mc_runs = 5;
@@ -139,6 +166,7 @@ int main(int argc, char** argv) {
   const auto specs = make_specs(1024, 7);
   run_black_scholes(specs, bs_repetitions);
   run_implied_volatility(specs, iv_operations);
+  run_svi(svi_operations);
 
   OptionSpec american;
   american.type = OptionType::Put;
