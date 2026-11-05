@@ -13,6 +13,14 @@ All notable changes to this project are documented here.
 - SVI tests for parameter recovery, quote round-trips, determinism, narrow
   strike ranges and invalid input.
 - Dedicated SVI calibration benchmark and mathematical notes.
+- `VolatilitySurface`: multi-expiry SVI slices with linear total-variance
+  interpolation, log-forward and log-discount interpolation, and direct
+  forward pricing.
+- Calendar arbitrage checks across adjacent slices and Gatheral butterfly
+  density checks at slice expiries and midpoints.
+- Surface tests for flat Black-Scholes reproduction, interpolation, forward
+  parity, arbitrage detection, zero variance and invalid inputs.
+- Surface benchmark and mathematical notes.
 
 ### Planned
 

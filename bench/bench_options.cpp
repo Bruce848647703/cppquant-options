@@ -1,4 +1,5 @@
 #include "cppquant/options.hpp"
+#include "cppquant/surface.hpp"
 #include "cppquant/volatility.hpp"
 
 #include <chrono>
@@ -105,6 +106,32 @@ void run_svi(std::size_t operations) {
       static_cast<double>(operations) / seconds / 1e3);
 }
 
+void run_surface(std::size_t operations) {
+  std::vector<SurfaceSlice> slices;
+  for (const double time : {0.25, 0.5, 1.0, 2.0}) {
+    const double forward = 100.0 * std::exp(0.03 * time);
+    const SviParameters parameters{0.04 * time, 0.0, 0.0, 0.0, 0.1};
+    slices.push_back(SurfaceSlice{SviSlice{forward, time, parameters},
+                                  std::exp(-0.03 * time)});
+  }
+  const VolatilitySurface surface(std::move(slices));
+
+  const auto start = Clock::now();
+  for (std::size_t index = 0; index < operations; ++index) {
+    const double moneyness =
+        -0.6 + 1.2 * static_cast<double>(index % 121) / 120.0;
+    const double time = 0.25 + 1.75 * static_cast<double>(index % 4) / 3.0;
+    const double strike = surface.forward(time) * std::exp(moneyness);
+    sink += surface.price(strike, time, OptionType::Call);
+    sink += surface.implied_volatility(strike, time);
+  }
+  const double seconds = seconds_since(start);
+  std::printf(
+      "surface price+IV (4 slices) %9zu ops  %8.1f ns/op  %6.2f M ops/s\n",
+      operations, seconds * 1e9 / static_cast<double>(operations),
+      static_cast<double>(operations) / seconds / 1e6);
+}
+
 void run_binomial(const OptionSpec& spec, int steps, std::size_t operations) {
   const auto start = Clock::now();
   for (std::size_t index = 0; index < operations; ++index) {
@@ -137,6 +164,7 @@ int main(int argc, char** argv) {
   std::size_t bs_repetitions = 1000;
   std::size_t iv_operations = 20'000;
   std::size_t svi_operations = 2'000;
+  std::size_t surface_operations = 1'000'000;
   int binomial_steps = 500;
   std::size_t binomial_operations = 200;
   std::size_t mc_paths = 200'000;
@@ -148,6 +176,7 @@ int main(int argc, char** argv) {
       bs_repetitions = 50;
       iv_operations = 1'000;
       svi_operations = 200;
+      surface_operations = 100'000;
       binomial_operations = 20;
       mc_paths = 50'000;
       mc_runs = 5;
@@ -167,6 +196,7 @@ int main(int argc, char** argv) {
   run_black_scholes(specs, bs_repetitions);
   run_implied_volatility(specs, iv_operations);
   run_svi(svi_operations);
+  run_surface(surface_operations);
 
   OptionSpec american;
   american.type = OptionType::Put;

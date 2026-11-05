@@ -15,6 +15,8 @@ reduction. No third-party dependencies.
   bracket, with explicit no-arbitrage bounds.
 - **SVI calibration** for one expiry: constrained raw SVI slices fitted by
   weighted least squares with a Levenberg-Marquardt optimizer.
+- **Volatility surface**: multi-expiry SVI interpolation in total variance and
+  log-forward, with calendar and butterfly arbitrage checks.
 - **Binomial CRR tree** for European and American options, including early
   exercise with dividends.
 - **Monte Carlo** for European options with antithetic variates, a
@@ -111,6 +113,30 @@ The optimizer keeps `b > 0`, `|rho| < 1`, `sigma > 0` and the minimum total
 variance non-negative by construction. See
 [docs/SVI.md](docs/SVI.md) for the parameterization and optimizer details.
 
+### Volatility surface
+
+```cpp
+#include "cppquant/surface.hpp"
+
+std::vector<SurfaceSlice> slices;
+for (double expiry : {0.25, 0.5, 1.0, 2.0}) {
+  const double forward = 100.0 * std::exp(0.03 * expiry);
+  const double df = std::exp(-0.03 * expiry);
+  slices.push_back(SurfaceSlice{
+      SviSlice{forward, expiry, params_for(expiry)}, df});
+}
+VolatilitySurface surface(std::move(slices));
+
+const double vol = surface.implied_volatility(100.0, 0.75);
+const double call = surface.price(105.0, 0.75, OptionType::Call);
+const bool clean = surface.is_arbitrage_free();
+```
+
+Total variance, log-forward and log-discount are interpolated in time. Queries
+outside the slice range throw instead of extrapolating. See
+[docs/SURFACE.md](docs/SURFACE.md) for the interpolation, pricing and
+calendar/butterfly checks.
+
 ## Command-line pricer
 
 ```bash
@@ -158,6 +184,7 @@ Reference numbers from an Apple M-series laptop (Apple clang 21, `-O3`):
 | Black-Scholes price + Greeks | 1,024,000 options | 80 ns/option | 12.5 M options/s |
 | Implied volatility | 20,000 options | 379 ns/option | 2.6 M options/s |
 | SVI calibration, 25 quotes | 2,000 fits | 17.4 µs/fit | 57.6 k fits/s |
+| Surface price + IV, 4 slices | 1,000,000 ops | 81.3 ns/op | 12.3 M ops/s |
 | Binomial American, 500 steps | 200 prices | 106 µs/price | 9.5 k prices/s |
 | Monte Carlo, 200,000 paths | 20 runs | 3.0 ms/run | 66 M paths/s |
 
@@ -172,6 +199,8 @@ These are indicative; run the benchmark on your own hardware.
   the European error is below `5e-3` on the tested cases.
 - SVI calibration recovers synthetic parameters to about `1e-3` and reproduces
   a 25-quote smile with implied-vol errors below `1e-9`.
+- A flat volatility surface reproduces Black-Scholes to better than `1e-10`;
+  calendar/butterfly checks detect constructed arbitrage.
 - Monte Carlo uses the sample standard error of the estimator after variance
   reduction. Antithetic pairs are averaged before estimating the control
   variate, so both techniques reduce the variance of the reported estimator.
@@ -187,6 +216,8 @@ src/black_scholes.cpp          validation, normal CDF/PDF, analytic prices
 src/implied_volatility.cpp     bracketed Newton solver
 src/binomial.cpp               CRR tree, deterministic zero-vol scan
 src/monte_carlo.cpp            GBM sampling, antithetic + control variate
+src/svi.cpp                    raw SVI calibration
+src/surface.cpp                surface interpolation, pricing and checks
 examples/option_pricer.cpp     CLI
 ```
 
@@ -206,7 +237,7 @@ recursion and the variance-reduction details.
 ## Tests
 
 The repository ships a tiny header-only test harness, so the build has no
-external test dependency. The 38 tests cover:
+external test dependency. The 48 tests cover:
 
 - three sets of reference prices and Greeks (ATM, dividends, negative rates);
 - put-call parity and finite-difference checks of every Greek;
@@ -217,7 +248,9 @@ external test dependency. The 38 tests cover:
 - Monte Carlo accuracy, reproducibility, variance reduction and argument
   validation;
 - SVI formula checks, symmetric and asymmetric parameter recovery, quote
-  round-trips, narrow strike ranges and constraint enforcement.
+  round-trips, narrow strike ranges and constraint enforcement;
+- flat-surface Black-Scholes reproduction, midpoint interpolation, forward
+  parity, calendar/butterfly detection and surface validation.
 
 ```bash
 ./build/options_tests             # all tests
