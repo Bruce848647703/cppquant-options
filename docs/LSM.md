@@ -90,12 +90,15 @@ The test suite compares against a 1,000-step binomial tree at 200,000 paths and
 | --- | ---: | ---: | --- |
 | ATM American put | ~6.05 | 6.0896 | 1% or 4 standard errors |
 | American call, no dividend | ~10.45 | Black-Scholes 10.4506 | 1% or 4 standard errors |
-| American call, `q = 10%` | ~5.43 | 5.4462 | 1% or 4 standard errors |
+| American call, `q = 10%` | ~5.38 | 5.4312 (50 steps) | 1% or 4 standard errors |
 
-The ATM put LSM price is slightly below the tree because the exercise grid is
-discrete and the regression is fitted in-sample. Increasing `exercise_steps`
-reduces the first source; the next milestone adds a European control variate to
-reduce the second.
+The ATM put LSM price is slightly below the 1,000-step tree because the
+exercise grid is discrete and the regression is fitted in-sample. The
+dividend-paying call is compared with a tree using the same 50-step exercise
+grid; the 1,000-step reference is 5.4462, so the remaining gap is mostly
+discretization. Increasing `exercise_steps` reduces that source; the next
+milestone adds a European control variate to reduce the Monte Carlo noise and
+regression bias.
 
 ## Limitations
 

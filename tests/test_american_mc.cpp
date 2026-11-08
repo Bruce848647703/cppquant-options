@@ -61,8 +61,11 @@ TEST(lsm_american_call_without_dividends_matches_european) {
 TEST(lsm_american_call_with_dividends_has_a_premium) {
   const OptionSpec spec =
       american(OptionType::Call, 100, 100, 1.0, 0.2, 0.03, 0.10);
-  const double tree = binomial_price(spec, 1000);
-  const auto result = longstaff_schwartz_price(spec, settings());
+  const auto config = settings();
+  // LSM is a Bermudan approximation; compare with the same exercise grid.
+  const double tree =
+      binomial_price(spec, static_cast<int>(config.exercise_steps));
+  const auto result = longstaff_schwartz_price(spec, config);
 
   CHECK_NEAR(result.price, tree,
              std::max(0.01 * tree, 4.0 * result.standard_error));
