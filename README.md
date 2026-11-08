@@ -17,6 +17,8 @@ reduction. No third-party dependencies.
   weighted least squares with a Levenberg-Marquardt optimizer.
 - **Volatility surface**: multi-expiry SVI interpolation in total variance and
   log-forward, with calendar and butterfly arbitrage checks.
+- **American Monte Carlo**: Longstaff-Schwartz regression on in-the-money
+  paths, antithetic variates and comparison with the binomial tree.
 - **Binomial CRR tree** for European and American options, including early
   exercise with dividends.
 - **Monte Carlo** for European options with antithetic variates, a
@@ -137,6 +139,26 @@ outside the slice range throw instead of extrapolating. See
 [docs/SURFACE.md](docs/SURFACE.md) for the interpolation, pricing and
 calendar/butterfly checks.
 
+### American Monte Carlo
+
+```cpp
+#include "cppquant/american_mc.hpp"
+
+OptionSpec american{OptionType::Put, ExerciseStyle::American,
+                    100.0, 100.0, 1.0, 0.2, 0.05, 0.0};
+
+LongstaffSchwartzSettings settings;
+settings.paths = 200'000;
+settings.exercise_steps = 50;
+settings.seed = 42;
+
+const auto result = longstaff_schwartz_price(american, settings);
+// result.price, result.standard_error, result.early_exercise_premium
+```
+
+See [docs/LSM.md](docs/LSM.md) for the regression setup, exercise policy and
+accuracy notes.
+
 ## Command-line pricer
 
 ```bash
@@ -185,6 +207,7 @@ Reference numbers from an Apple M-series laptop (Apple clang 21, `-O3`):
 | Implied volatility | 20,000 options | 379 ns/option | 2.6 M options/s |
 | SVI calibration, 25 quotes | 2,000 fits | 17.4 µs/fit | 57.6 k fits/s |
 | Surface price + IV, 4 slices | 1,000,000 ops | 81.3 ns/op | 12.3 M ops/s |
+| LSM American put | 200,000 paths × 50 steps | 311 ms | 0.64 M paths/s |
 | Binomial American, 500 steps | 200 prices | 106 µs/price | 9.5 k prices/s |
 | Monte Carlo, 200,000 paths | 20 runs | 3.0 ms/run | 66 M paths/s |
 
@@ -201,6 +224,8 @@ These are indicative; run the benchmark on your own hardware.
   a 25-quote smile with implied-vol errors below `1e-9`.
 - A flat volatility surface reproduces Black-Scholes to better than `1e-10`;
   calendar/butterfly checks detect constructed arbitrage.
+- LSM American prices agree with a 1,000-step binomial tree within 1% or four
+  standard errors on the tested put and dividend-paying call.
 - Monte Carlo uses the sample standard error of the estimator after variance
   reduction. Antithetic pairs are averaged before estimating the control
   variate, so both techniques reduce the variance of the reported estimator.
@@ -218,6 +243,7 @@ src/binomial.cpp               CRR tree, deterministic zero-vol scan
 src/monte_carlo.cpp            GBM sampling, antithetic + control variate
 src/svi.cpp                    raw SVI calibration
 src/surface.cpp                surface interpolation, pricing and checks
+src/american_mc.cpp            Longstaff-Schwartz American Monte Carlo
 examples/option_pricer.cpp     CLI
 ```
 
@@ -237,7 +263,7 @@ recursion and the variance-reduction details.
 ## Tests
 
 The repository ships a tiny header-only test harness, so the build has no
-external test dependency. The 48 tests cover:
+external test dependency. The 57 tests cover:
 
 - three sets of reference prices and Greeks (ATM, dividends, negative rates);
 - put-call parity and finite-difference checks of every Greek;
@@ -250,7 +276,9 @@ external test dependency. The 48 tests cover:
 - SVI formula checks, symmetric and asymmetric parameter recovery, quote
   round-trips, narrow strike ranges and constraint enforcement;
 - flat-surface Black-Scholes reproduction, midpoint interpolation, forward
-  parity, calendar/butterfly detection and surface validation.
+  parity, calendar/butterfly detection and surface validation;
+- LSM American put/call accuracy, reproducibility, antithetic rounding, zero
+  volatility, expiry, immediate exercise and invalid settings.
 
 ```bash
 ./build/options_tests             # all tests

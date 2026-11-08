@@ -1,3 +1,4 @@
+#include "cppquant/american_mc.hpp"
 #include "cppquant/options.hpp"
 #include "cppquant/surface.hpp"
 #include "cppquant/volatility.hpp"
@@ -132,6 +133,32 @@ void run_surface(std::size_t operations) {
       static_cast<double>(operations) / seconds / 1e6);
 }
 
+void run_lsm(std::size_t paths, std::size_t steps) {
+  OptionSpec spec{OptionType::Put,
+                  ExerciseStyle::American,
+                  100.0,
+                  100.0,
+                  1.0,
+                  0.2,
+                  0.05,
+                  0.0};
+  LongstaffSchwartzSettings settings;
+  settings.paths = paths;
+  settings.exercise_steps = steps;
+  settings.seed = 42;
+
+  const auto start = Clock::now();
+  const auto result = longstaff_schwartz_price(spec, settings);
+  const double seconds = seconds_since(start);
+  sink += result.price + result.standard_error;
+
+  std::printf("LSM American put (%zu paths, %zu steps)  price %.4f  se %.4f  "
+              "%.1f ms  %.1f M paths/s\n",
+              result.effective_paths, steps, result.price,
+              result.standard_error, seconds * 1e3,
+              static_cast<double>(result.effective_paths) / seconds / 1e6);
+}
+
 void run_binomial(const OptionSpec& spec, int steps, std::size_t operations) {
   const auto start = Clock::now();
   for (std::size_t index = 0; index < operations; ++index) {
@@ -165,6 +192,8 @@ int main(int argc, char** argv) {
   std::size_t iv_operations = 20'000;
   std::size_t svi_operations = 2'000;
   std::size_t surface_operations = 1'000'000;
+  std::size_t lsm_paths = 200'000;
+  std::size_t lsm_steps = 50;
   int binomial_steps = 500;
   std::size_t binomial_operations = 200;
   std::size_t mc_paths = 200'000;
@@ -177,6 +206,8 @@ int main(int argc, char** argv) {
       iv_operations = 1'000;
       svi_operations = 200;
       surface_operations = 100'000;
+      lsm_paths = 50'000;
+      lsm_steps = 25;
       binomial_operations = 20;
       mc_paths = 50'000;
       mc_runs = 5;
@@ -197,6 +228,7 @@ int main(int argc, char** argv) {
   run_implied_volatility(specs, iv_operations);
   run_svi(svi_operations);
   run_surface(surface_operations);
+  run_lsm(lsm_paths, lsm_steps);
 
   OptionSpec american;
   american.type = OptionType::Put;

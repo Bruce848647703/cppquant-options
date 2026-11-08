@@ -40,6 +40,7 @@ add_library(cppquant_options
     src/monte_carlo.cpp
     src/svi.cpp
     src/surface.cpp
+    src/american_mc.cpp
 )
 add_library(cppquant::options ALIAS cppquant_options)
 target_include_directories(cppquant_options PUBLIC
@@ -74,6 +75,7 @@ if(CPPQUANT_BUILD_TESTS)
         tests/test_options.cpp
         tests/test_svi.cpp
         tests/test_surface.cpp
+        tests/test_american_mc.cpp
     )
     target_link_libraries(options_tests PRIVATE cppquant::options)
     target_include_directories(options_tests PRIVATE tests)

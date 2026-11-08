@@ -21,6 +21,12 @@ All notable changes to this project are documented here.
 - Surface tests for flat Black-Scholes reproduction, interpolation, forward
   parity, arbitrage detection, zero variance and invalid inputs.
 - Surface benchmark and mathematical notes.
+- Longstaff-Schwartz American Monte Carlo with in-the-money polynomial
+  regression, antithetic variates, immediate-exercise handling and standard
+  errors.
+- LSM tests against a 1,000-step binomial tree, including dividend-paying calls
+  and zero-volatility/expiry edge cases.
+- LSM benchmark and mathematical notes.
 
 ### Planned
 
