@@ -41,6 +41,7 @@ add_library(cppquant_options
     src/monte_carlo.cpp
     src/svi.cpp
     src/surface.cpp
+    src/barrier.cpp
     src/american_mc.cpp
     src/pde.cpp
 )
@@ -87,6 +88,7 @@ if(CPPQUANT_BUILD_TESTS)
         tests/test_surface.cpp
         tests/test_american_mc.cpp
         tests/test_pde.cpp
+        tests/test_barrier.cpp
     )
     target_link_libraries(options_tests PRIVATE cppquant::options)
     target_include_directories(options_tests PRIVATE tests)

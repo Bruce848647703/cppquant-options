@@ -1,4 +1,5 @@
 #include "cppquant/american_mc.hpp"
+#include "cppquant/barrier.hpp"
 #include "cppquant/options.hpp"
 #include "cppquant/pde.hpp"
 #include "cppquant/surface.hpp"
@@ -259,6 +260,64 @@ void run_local_vol_pde(std::size_t space_steps, std::size_t time_steps,
       static_cast<double>(operations) / seconds, clamped);
 }
 
+void run_barrier(std::size_t operations) {
+  const OptionSpec spec{OptionType::Call,
+                        ExerciseStyle::European,
+                        100.0,
+                        100.0,
+                        1.0,
+                        0.2,
+                        0.05,
+                        0.02};
+  const auto start = Clock::now();
+  for (std::size_t index = 0; index < operations; ++index) {
+    sink += down_and_out_price(spec, 80.0);
+  }
+  const double seconds = seconds_since(start);
+  std::printf(
+      "barrier down-and-out price %9zu ops  %8.1f ns/op  %6.2f M ops/s\n",
+      operations, seconds * 1e9 / static_cast<double>(operations),
+      static_cast<double>(operations) / seconds / 1e6);
+
+  const auto greeks_start = Clock::now();
+  for (std::size_t index = 0; index < operations; ++index) {
+    const auto greeks = down_and_out_greeks(spec, 80.0);
+    sink += greeks.price + greeks.delta + greeks.vega;
+  }
+  const double greeks_seconds = seconds_since(greeks_start);
+  std::printf(
+      "barrier price+delta+vega  %9zu ops  %8.1f ns/op  %6.2f M ops/s\n",
+      operations, greeks_seconds * 1e9 / static_cast<double>(operations),
+      static_cast<double>(operations) / greeks_seconds / 1e6);
+}
+
+void run_barrier_pde(std::size_t space_steps, std::size_t time_steps,
+                     std::size_t operations) {
+  const OptionSpec spec{OptionType::Call,
+                        ExerciseStyle::European,
+                        100.0,
+                        100.0,
+                        1.0,
+                        0.2,
+                        0.05,
+                        0.02};
+  PdeSettings settings;
+  settings.space_steps = space_steps;
+  settings.time_steps = time_steps;
+
+  const auto start = Clock::now();
+  for (std::size_t index = 0; index < operations; ++index) {
+    const auto result = crank_nicolson_down_and_out_price(spec, 80.0, settings);
+    sink += result.price + result.delta + result.gamma;
+  }
+  const double seconds = seconds_since(start);
+  std::printf("PDE barrier down-and-out (%zux%zu) %5zu prices  %8.2f us/price  "
+              "%6.1f prices/s\n",
+              space_steps, time_steps, operations,
+              seconds * 1e6 / static_cast<double>(operations),
+              static_cast<double>(operations) / seconds);
+}
+
 void run_binomial(const OptionSpec& spec, int steps, std::size_t operations) {
   const auto start = Clock::now();
   for (std::size_t index = 0; index < operations; ++index) {
@@ -302,6 +361,8 @@ int main(int argc, char** argv) {
   std::size_t binomial_operations = 200;
   std::size_t mc_paths = 200'000;
   std::size_t mc_runs = 20;
+  std::size_t barrier_operations = 200'000;
+  std::size_t barrier_pde_operations = 200;
 
   for (int index = 1; index < argc; ++index) {
     const std::string argument = argv[index];
@@ -318,6 +379,8 @@ int main(int argc, char** argv) {
       binomial_operations = 20;
       mc_paths = 50'000;
       mc_runs = 5;
+      barrier_operations = 20'000;
+      barrier_pde_operations = 20;
     } else if (argument == "--convergence") {
       convergence = true;
     } else if (argument == "--help" || argument == "-h") {
@@ -340,6 +403,8 @@ int main(int argc, char** argv) {
   run_lsm(lsm_paths, lsm_steps);
   run_pde(pde_space, pde_time, pde_operations);
   run_local_vol_pde(pde_space, pde_time, pde_operations / 5 + 1);
+  run_barrier(barrier_operations);
+  run_barrier_pde(pde_space, pde_time, barrier_pde_operations);
   if (convergence) {
     run_lsm_convergence();
   }

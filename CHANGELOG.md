@@ -44,6 +44,11 @@ All notable changes to this project are documented here.
   flooring and validation.
 - Local-vol benchmark, surface demo data generator and expanded surface/PDE
   documentation.
+- Analytic European down-and-out call and put prices with delta and vega.
+- Down-and-out Crank-Nicolson PDE with the barrier on the lower grid boundary.
+- Barrier tests against independent reflection integrals, knockout limits,
+  zero volatility, Greeks and PDE prices.
+- Barrier benchmark and `docs/BARRIER.md`.
 
 ### Fixed
 

@@ -1,5 +1,7 @@
 #include "cppquant/pde.hpp"
 
+#include "cppquant/barrier.hpp"
+
 #include "detail.hpp"
 
 #include <algorithm>
@@ -94,7 +96,8 @@ void validate_settings(const PdeSettings& settings) {
 /// grid and is not used for the coefficients.
 template <typename VarianceFunction>
 PdeResult solve_pde(const OptionSpec& spec, const PdeSettings& settings,
-                    VarianceFunction&& variance, double volatility_estimate) {
+                    VarianceFunction&& variance, double volatility_estimate,
+                    double spot_min = 0.0, bool zero_lower_boundary = false) {
   PdeResult result;
   result.space_steps = settings.space_steps;
   result.time_steps = settings.time_steps;
@@ -113,16 +116,19 @@ PdeResult solve_pde(const OptionSpec& spec, const PdeSettings& settings,
       std::exp(settings.width_stddev * std::max(volatility_estimate, 1e-6) *
                std::sqrt(time));
   double s_max = std::max(width, spec.spot * 1.01);
+  s_max = std::max(s_max, spot_min + (spec.spot - spot_min) * 1.01);
   const std::size_t space_steps = settings.space_steps;
   const std::size_t time_steps = settings.time_steps;
-  double ds = s_max / static_cast<double>(space_steps);
+  double ds = (s_max - spot_min) / static_cast<double>(space_steps);
 
   // Put the spot exactly on a grid node. This removes the O(dS) error from
-  // interpolating the price and Greeks near the strike.
-  const auto spot_node = static_cast<std::size_t>(std::llround(spec.spot / ds));
+  // interpolating the price and Greeks near the strike. The lower grid point is
+  // either zero or an exact barrier.
+  const auto spot_node =
+      static_cast<std::size_t>(std::llround((spec.spot - spot_min) / ds));
   if (spot_node >= 1 && spot_node < space_steps) {
-    ds = spec.spot / static_cast<double>(spot_node);
-    s_max = ds * static_cast<double>(space_steps);
+    ds = (spec.spot - spot_min) / static_cast<double>(spot_node);
+    s_max = spot_min + ds * static_cast<double>(space_steps);
   }
   const double dt = time / static_cast<double>(time_steps);
   const double floor = settings.local_variance_floor;
@@ -164,20 +170,24 @@ PdeResult solve_pde(const OptionSpec& spec, const PdeSettings& settings,
   std::vector<double> values(space_steps + 1, 0.0);
   for (std::size_t index = 0; index <= space_steps; ++index) {
     values[index] = detail::option_payoff(
-        spec.type, static_cast<double>(index) * ds, spec.strike);
+        spec.type, spot_min + static_cast<double>(index) * ds, spec.strike);
+  }
+  if (zero_lower_boundary) {
+    values[0] = 0.0;
   }
 
   double tau = 0.0;
   for (const TimeStep& step : schedule) {
     tau += step.size;
     const double tau_remaining = std::max(0.0, time - tau);
-    const double new_left = left_boundary(spec, tau);
+    const double new_left =
+        zero_lower_boundary ? 0.0 : left_boundary(spec, tau);
     const double new_right = right_boundary(spec, s_max, tau);
     const double theta = step.theta;
     const double explicit_weight = 1.0 - theta;
 
     for (std::size_t index = 1; index < space_steps; ++index) {
-      const double spot = static_cast<double>(index) * ds;
+      const double spot = spot_min + static_cast<double>(index) * ds;
       const double diffusion =
           0.5 * node_variance(spot, tau_remaining) * spot * spot / (ds * ds);
       const double convection =
@@ -210,15 +220,19 @@ PdeResult solve_pde(const OptionSpec& spec, const PdeSettings& settings,
 
     if (spec.style == ExerciseStyle::American) {
       for (std::size_t index = 0; index <= space_steps; ++index) {
-        values[index] = std::max(
-            values[index],
-            detail::option_payoff(spec.type, static_cast<double>(index) * ds,
-                                  spec.strike));
+        values[index] =
+            std::max(values[index],
+                     detail::option_payoff(
+                         spec.type, spot_min + static_cast<double>(index) * ds,
+                         spec.strike));
+      }
+      if (zero_lower_boundary) {
+        values[0] = 0.0;
       }
     }
   }
 
-  const double grid_position = spec.spot / ds;
+  const double grid_position = (spec.spot - spot_min) / ds;
   std::size_t lower_index = static_cast<std::size_t>(std::floor(grid_position));
   if (lower_index >= space_steps) {
     lower_index = space_steps - 1;
@@ -316,6 +330,25 @@ PdeResult crank_nicolson_local_vol_price(const OptionSpec& spec,
   }
 
   return solve_pde(spec, settings, local_variance, volatility_estimate);
+}
+
+PdeResult crank_nicolson_down_and_out_price(const OptionSpec& spec,
+                                            double barrier,
+                                            const PdeSettings& settings) {
+  validate_down_and_out(spec, barrier);
+  validate_settings(settings);
+
+  if (spec.spot <= barrier) {
+    PdeResult result;
+    result.space_steps = settings.space_steps;
+    result.time_steps = settings.time_steps;
+    return result;
+  }
+
+  const double variance = spec.volatility * spec.volatility;
+  return solve_pde(
+      spec, settings, [variance](double, double) { return variance; },
+      spec.volatility, barrier, true);
 }
 
 } // namespace cppquant

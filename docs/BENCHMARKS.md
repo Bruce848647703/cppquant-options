@@ -12,6 +12,9 @@ Reference environment: Apple M-series (arm64), Apple clang 21.0.0,
 | LSM American put | 200,000 paths × 50 steps | 331 ms | 0.60 M paths/s |
 | PDE Crank-Nicolson | 400 × 400 grid | 0.85 ms/price | 1.2 k prices/s |
 | PDE Dupire local vol | 400 × 400 grid | 7.0 ms/price | 143 prices/s |
+| Barrier analytic price | 200,000 prices | 51 ns/price | 19.6 M prices/s |
+| Barrier price + delta + vega | 200,000 prices | 264 ns/price | 3.8 M prices/s |
+| PDE barrier down-and-out | 400 × 400 grid | 0.94 ms/price | 1.1 k prices/s |
 | Binomial American, 500 steps | 200 prices | 105.7 µs/price | 9.5 k prices/s |
 | Monte Carlo, 200,000 paths | 20 runs | 3.03 ms/run | 66.0 M paths/s |
 
@@ -131,6 +134,21 @@ variance adds roughly 7x. The flat surface reproduces Black-Scholes within `2e-3
 800 × 800 grid; a two-slice term structure integrates to the same total
 variance.
 
+## W7: barrier options
+
+The analytic benchmark prices the same European down-and-out call 200,000 times.
+The Greeks benchmark adds central-difference delta and vega. The PDE benchmark
+places the barrier on the lower grid boundary.
+
+| Workload | Operations | Latency | Throughput |
+| --- | ---: | ---: | ---: |
+| Analytic price | 200,000 | 50.9 ns/op | 19.6 M ops/s |
+| Price + delta + vega | 200,000 | 264 ns/op | 3.8 M ops/s |
+| PDE, 400 × 400 | 200 | 0.94 ms/price | 1.1 k prices/s |
+
+The 800 × 800 PDE agrees with the analytic price within `7e-4` across barriers
+from 60 to 99. A barrier near zero recovers the vanilla Black-Scholes price.
+
 ## Planned baselines
 
-- W7: barrier-option PDE and Monte Carlo.
+- W8: final release numbers.

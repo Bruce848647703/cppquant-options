@@ -86,6 +86,8 @@ it does not constrain it.
   log-forward, with calendar and butterfly arbitrage checks.
 - **Dupire local volatility**: local variance and volatility from the surface,
   with diagnostics for negative density and a local-vol Crank-Nicolson PDE.
+- **Barrier options**: analytic European down-and-out calls and puts, delta and
+  vega, and a barrier-aligned Crank-Nicolson PDE cross-check.
 - **American Monte Carlo**: Longstaff-Schwartz regression on in-the-money
   paths, antithetic variates, a European-payoff control variate and comparison
   with the binomial tree.
@@ -262,6 +264,23 @@ const PdeResult local =
 See [docs/PDE.md](docs/PDE.md) for the discretization, boundaries, local-vol
 path and convergence table.
 
+### Barrier options
+
+```cpp
+#include "cppquant/barrier.hpp"
+
+OptionSpec barrier_call{OptionType::Call, ExerciseStyle::European,
+                        100.0, 100.0, 1.0, 0.2, 0.05, 0.02};
+
+const BarrierGreeks greeks = down_and_out_greeks(barrier_call, 80.0);
+const PdeResult pde = crank_nicolson_down_and_out_price(
+    barrier_call, 80.0, settings);
+```
+
+The analytic formulas use a continuous barrier and no rebate. The PDE places
+the barrier exactly on the lower grid boundary. See
+[docs/BARRIER.md](docs/BARRIER.md) for the formulas, Greeks and cross-check.
+
 ## Command-line pricer
 
 ```bash
@@ -313,6 +332,9 @@ Reference numbers from an Apple M-series laptop (Apple clang 21, `-O3`):
 | LSM American put | 200,000 paths × 50 steps | 331 ms | 0.60 M paths/s |
 | PDE Crank-Nicolson | 400 × 400 grid | 0.85 ms/price | 1.2 k prices/s |
 | PDE Dupire local vol | 400 × 400 grid | 7.0 ms/price | 143 prices/s |
+| Barrier analytic price | 200,000 prices | 51 ns/price | 19.6 M prices/s |
+| Barrier price + delta + vega | 200,000 prices | 264 ns/price | 3.8 M prices/s |
+| PDE barrier down-and-out | 400 × 400 grid | 0.94 ms/price | 1.1 k prices/s |
 | Binomial American, 500 steps | 200 prices | 106 µs/price | 9.5 k prices/s |
 | Monte Carlo, 200,000 paths | 20 runs | 3.0 ms/run | 66 M paths/s |
 
@@ -355,6 +377,7 @@ src/binomial.cpp               CRR tree, deterministic zero-vol scan
 src/monte_carlo.cpp            GBM sampling, antithetic + control variate
 src/svi.cpp                    raw SVI calibration
 src/surface.cpp                surface interpolation, pricing and checks
+src/barrier.cpp                down-and-out analytics and Greeks
 src/american_mc.cpp            Longstaff-Schwartz American Monte Carlo
 src/pde.cpp                    Crank-Nicolson and local-vol finite differences
 examples/option_pricer.cpp     CLI
@@ -373,13 +396,15 @@ recursion and the variance-reduction details.
   outside `[0, 1]`, rather than silently returning a misleading price.
 - Local volatility comes from a fitted surface; there is no stochastic
   volatility, jump diffusion or discrete dividend schedule.
+- Barrier options use continuous monitoring, no rebate and European exercise
+  only; up-and-out and double barriers are not implemented.
 - The local-vol PDE keeps the drift from the option's constant rate and
   dividend yield, so the surface forwards should be consistent with them.
 
 ## Tests
 
 The repository ships a tiny header-only test harness, so the build has no
-external test dependency. The 82 tests cover:
+external test dependency. The 90 tests cover:
 
 - three sets of reference prices and Greeks (ATM, dividends, negative rates);
 - put-call parity and finite-difference checks of every Greek;
@@ -401,7 +426,9 @@ external test dependency. The 82 tests cover:
   zero-volatility fallback and deep in-the-money boundaries;
 - Dupire local variance against finite-difference Dupire prices, flat and
   term-structure surfaces, negative-variance flooring and local-vol PDE
-  accuracy on skewed surfaces, American exercise and validation.
+  accuracy on skewed surfaces, American exercise and validation;
+- down-and-out analytic prices against independent reflection integrals,
+  knockout limits, delta/vega, PDE agreement, zero volatility and validation.
 
 ```bash
 ./build/options_tests             # all tests

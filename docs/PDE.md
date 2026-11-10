@@ -171,7 +171,7 @@ within 1%.
   boundary, even though the European scheme is second order in smooth regions.
 - Local variance is evaluated at the start of each time step rather than at
   the Crank-Nicolson midpoint.
-- No discrete dividends or barrier conditions yet.
+- No discrete dividends; barrier contracts use a separate entry point.
 - `S_max` is chosen from a log-normal width; very heavy tails may need a wider
   grid.
 
