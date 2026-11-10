@@ -47,6 +47,65 @@ TEST(lsm_american_put_matches_binomial) {
   CHECK_NEAR(result.european_price, black_scholes_price(european(spec)), 1e-12);
 }
 
+TEST(lsm_control_variate_reduces_standard_error) {
+  const OptionSpec spec = american(OptionType::Put, 100, 100, 1.0, 0.2, 0.05);
+  const double tree = binomial_price(spec, 1000);
+
+  auto plain_config = settings();
+  plain_config.control_variate = false;
+  plain_config.antithetic = false;
+  const auto plain = longstaff_schwartz_price(spec, plain_config);
+
+  auto controlled_config = settings();
+  controlled_config.control_variate = true;
+  const auto controlled = longstaff_schwartz_price(spec, controlled_config);
+
+  CHECK(controlled.control_variate_used);
+  CHECK(controlled.control_variate_beta != 0.0);
+  CHECK(controlled.standard_error < 0.55 * plain.standard_error);
+  CHECK_NEAR(controlled.price, tree,
+             std::max(0.01 * tree, 4.0 * controlled.standard_error));
+}
+
+TEST(lsm_control_variate_improves_antithetic_only) {
+  const OptionSpec spec = american(OptionType::Put, 100, 100, 1.0, 0.2, 0.05);
+  auto base = settings();
+  base.control_variate = false;
+  auto controlled = base;
+  controlled.control_variate = true;
+
+  const auto antithetic = longstaff_schwartz_price(spec, base);
+  const auto with_control = longstaff_schwartz_price(spec, controlled);
+
+  CHECK(with_control.standard_error < 0.95 * antithetic.standard_error);
+  CHECK_NEAR(
+      with_control.price, antithetic.price,
+      4.0 * std::max(with_control.standard_error, antithetic.standard_error));
+}
+
+TEST(lsm_more_paths_reduce_standard_error) {
+  const OptionSpec spec = american(OptionType::Put, 100, 100, 1.0, 0.2, 0.05);
+  const auto small = longstaff_schwartz_price(spec, settings(10'000, 50, 42));
+  const auto large = longstaff_schwartz_price(spec, settings(100'000, 50, 42));
+
+  CHECK(large.standard_error < small.standard_error);
+  CHECK(std::abs(large.price - small.price) < 0.05);
+}
+
+TEST(lsm_basis_degrees_stay_close_to_the_tree) {
+  const OptionSpec spec = american(OptionType::Put, 100, 100, 1.0, 0.2, 0.05);
+  const double tree = binomial_price(spec, 1000);
+
+  for (const int degree : {1, 2, 3}) {
+    auto config = settings(100'000, 50, 11);
+    config.polynomial_degree = degree;
+    const auto result = longstaff_schwartz_price(spec, config);
+    const double relative = degree == 1 ? 0.04 : 0.02;
+    CHECK_NEAR(result.price, tree,
+               std::max(relative * tree, 4.0 * result.standard_error));
+  }
+}
+
 TEST(lsm_american_call_without_dividends_matches_european) {
   const OptionSpec spec = american(OptionType::Call, 100, 100, 1.0, 0.2, 0.05);
   const double european_price = black_scholes_price(european(spec));

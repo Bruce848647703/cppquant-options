@@ -16,6 +16,9 @@ struct LongstaffSchwartzSettings {
   int polynomial_degree{2};
   /// Pair each normal draw with its negative to reduce variance.
   bool antithetic{true};
+  /// Use the European payoff as a control variate with known Black-Scholes
+  /// expectation.
+  bool control_variate{true};
 };
 
 struct AmericanMonteCarloResult {
@@ -23,6 +26,8 @@ struct AmericanMonteCarloResult {
   double standard_error{};
   double european_price{};
   double early_exercise_premium{};
+  bool control_variate_used{};
+  double control_variate_beta{};
   std::size_t paths{};
   std::size_t effective_paths{};
   std::size_t exercise_steps{};

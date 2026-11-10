@@ -173,10 +173,16 @@ longstaff_schwartz_price(const OptionSpec& spec,
   }
 
   std::vector<double> cashflow(effective, 0.0);
+  std::vector<double> european_cashflow(effective, 0.0);
   std::vector<std::size_t> exercise_step(effective, steps);
+  const double terminal_discount =
+      std::exp(-spec.risk_free_rate * spec.time_to_expiry);
   for (std::size_t row = 0; row < effective; ++row) {
-    cashflow[row] = detail::option_payoff(
-        spec.type, spots[row * stride + steps], spec.strike);
+    const double terminal = spots[row * stride + steps];
+    cashflow[row] = detail::option_payoff(spec.type, terminal, spec.strike);
+    european_cashflow[row] =
+        terminal_discount *
+        detail::option_payoff(spec.type, terminal, spec.strike);
   }
 
   std::vector<double> moneyness;
@@ -230,26 +236,81 @@ longstaff_schwartz_price(const OptionSpec& spec,
     }
   }
 
-  double sum = 0.0;
+  std::vector<double> american_cashflow(effective, 0.0);
   for (std::size_t row = 0; row < effective; ++row) {
-    const double discounted_cashflow =
+    american_cashflow[row] =
         cashflow[row] *
         std::exp(-spec.risk_free_rate *
                  static_cast<double>(exercise_step[row]) * step_time);
-    cashflow[row] = discounted_cashflow;
-    sum += discounted_cashflow;
   }
-  const double mean = sum / static_cast<double>(effective);
+
+  std::vector<double> sample_american;
+  std::vector<double> sample_european;
+  if (settings.antithetic) {
+    const std::size_t pairs = effective / 2;
+    sample_american.reserve(pairs);
+    sample_european.reserve(pairs);
+    for (std::size_t index = 0; index < pairs; ++index) {
+      sample_american.push_back(0.5 * (american_cashflow[2 * index] +
+                                       american_cashflow[2 * index + 1]));
+      sample_european.push_back(0.5 * (european_cashflow[2 * index] +
+                                       european_cashflow[2 * index + 1]));
+    }
+  } else {
+    sample_american = std::move(american_cashflow);
+    sample_european = std::move(european_cashflow);
+  }
+
+  const std::size_t samples = sample_american.size();
+  std::vector<double> adjusted = sample_american;
+  result.european_price = black_scholes_price(european);
+
+  if (settings.control_variate && samples >= 2) {
+    double mean_american = 0.0;
+    double mean_european = 0.0;
+    for (std::size_t index = 0; index < samples; ++index) {
+      mean_american += sample_american[index];
+      mean_european += sample_european[index];
+    }
+    mean_american /= static_cast<double>(samples);
+    mean_european /= static_cast<double>(samples);
+
+    double covariance = 0.0;
+    double european_variance = 0.0;
+    for (std::size_t index = 0; index < samples; ++index) {
+      const double dy = sample_american[index] - mean_american;
+      const double dx = sample_european[index] - mean_european;
+      covariance += dy * dx;
+      european_variance += dx * dx;
+    }
+    covariance /= static_cast<double>(samples - 1);
+    european_variance /= static_cast<double>(samples - 1);
+
+    const double beta =
+        european_variance > 0.0 ? covariance / european_variance : 0.0;
+    for (std::size_t index = 0; index < samples; ++index) {
+      adjusted[index] = sample_american[index] -
+                        beta * (sample_european[index] - result.european_price);
+    }
+    result.control_variate_used = true;
+    result.control_variate_beta = beta;
+  }
+
+  double sum = 0.0;
+  for (const double value : adjusted) {
+    sum += value;
+  }
+  const double mean = sum / static_cast<double>(samples);
 
   double variance = 0.0;
-  for (const double value : cashflow) {
-    const double difference = value - mean;
-    variance += difference * difference;
+  if (samples >= 2) {
+    for (const double value : adjusted) {
+      const double difference = value - mean;
+      variance += difference * difference;
+    }
+    variance /= static_cast<double>(samples - 1);
+    result.standard_error = std::sqrt(variance / static_cast<double>(samples));
   }
-  variance /= static_cast<double>(effective - 1);
-
-  result.european_price = black_scholes_price(european);
-  result.standard_error = std::sqrt(variance / static_cast<double>(effective));
   result.price = mean;
 
   const double immediate =

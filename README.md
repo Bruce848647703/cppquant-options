@@ -18,7 +18,8 @@ reduction. No third-party dependencies.
 - **Volatility surface**: multi-expiry SVI interpolation in total variance and
   log-forward, with calendar and butterfly arbitrage checks.
 - **American Monte Carlo**: Longstaff-Schwartz regression on in-the-money
-  paths, antithetic variates and comparison with the binomial tree.
+  paths, antithetic variates, a European-payoff control variate and comparison
+  with the binomial tree.
 - **Binomial CRR tree** for European and American options, including early
   exercise with dividends.
 - **Monte Carlo** for European options with antithetic variates, a
@@ -151,6 +152,7 @@ LongstaffSchwartzSettings settings;
 settings.paths = 200'000;
 settings.exercise_steps = 50;
 settings.seed = 42;
+settings.control_variate = true;
 
 const auto result = longstaff_schwartz_price(american, settings);
 // result.price, result.standard_error, result.early_exercise_premium
@@ -207,7 +209,7 @@ Reference numbers from an Apple M-series laptop (Apple clang 21, `-O3`):
 | Implied volatility | 20,000 options | 379 ns/option | 2.6 M options/s |
 | SVI calibration, 25 quotes | 2,000 fits | 17.4 µs/fit | 57.6 k fits/s |
 | Surface price + IV, 4 slices | 1,000,000 ops | 81.3 ns/op | 12.3 M ops/s |
-| LSM American put | 200,000 paths × 50 steps | 311 ms | 0.64 M paths/s |
+| LSM American put | 200,000 paths × 50 steps | 331 ms | 0.60 M paths/s |
 | Binomial American, 500 steps | 200 prices | 106 µs/price | 9.5 k prices/s |
 | Monte Carlo, 200,000 paths | 20 runs | 3.0 ms/run | 66 M paths/s |
 
@@ -226,6 +228,8 @@ These are indicative; run the benchmark on your own hardware.
   calendar/butterfly checks detect constructed arbitrage.
 - LSM American prices agree with a 1,000-step binomial tree within 1% or four
   standard errors on the tested put and dividend-paying call.
+- Adding the European control variate cuts the LSM standard error by about 48%
+  versus plain no-variance-reduction Monte Carlo at 200,000 paths.
 - Monte Carlo uses the sample standard error of the estimator after variance
   reduction. Antithetic pairs are averaged before estimating the control
   variate, so both techniques reduce the variance of the reported estimator.
@@ -263,7 +267,7 @@ recursion and the variance-reduction details.
 ## Tests
 
 The repository ships a tiny header-only test harness, so the build has no
-external test dependency. The 57 tests cover:
+external test dependency. The 61 tests cover:
 
 - three sets of reference prices and Greeks (ATM, dividends, negative rates);
 - put-call parity and finite-difference checks of every Greek;
@@ -278,7 +282,9 @@ external test dependency. The 57 tests cover:
 - flat-surface Black-Scholes reproduction, midpoint interpolation, forward
   parity, calendar/butterfly detection and surface validation;
 - LSM American put/call accuracy, reproducibility, antithetic rounding, zero
-  volatility, expiry, immediate exercise and invalid settings.
+  volatility, expiry, immediate exercise and invalid settings;
+- control-variate standard-error reduction, path-count convergence and basis
+  degree comparisons.
 
 ```bash
 ./build/options_tests             # all tests

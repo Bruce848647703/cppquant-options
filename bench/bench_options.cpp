@@ -159,6 +159,39 @@ void run_lsm(std::size_t paths, std::size_t steps) {
               static_cast<double>(result.effective_paths) / seconds / 1e6);
 }
 
+void run_lsm_convergence() {
+  OptionSpec spec{OptionType::Put,
+                  ExerciseStyle::American,
+                  100.0,
+                  100.0,
+                  1.0,
+                  0.2,
+                  0.05,
+                  0.0};
+  std::printf("\nLSM convergence (ATM American put, 50 steps)\n");
+  std::printf("%10s %8s %12s %10s %12s %10s\n", "paths", "control", "price",
+              "se", "ms", "beta");
+  for (std::size_t paths : {10'000, 50'000, 200'000, 1'000'000}) {
+    for (const bool control : {false, true}) {
+      LongstaffSchwartzSettings settings;
+      settings.paths = paths;
+      settings.exercise_steps = 50;
+      settings.seed = 42;
+      settings.antithetic = true;
+      settings.control_variate = control;
+
+      const auto start = Clock::now();
+      const auto result = longstaff_schwartz_price(spec, settings);
+      const double seconds = seconds_since(start);
+      sink += result.price + result.standard_error;
+      std::printf("%10zu %8s %12.6f %10.6f %12.1f %10.4f\n",
+                  result.effective_paths, control ? "yes" : "no", result.price,
+                  result.standard_error, seconds * 1e3,
+                  result.control_variate_beta);
+    }
+  }
+}
+
 void run_binomial(const OptionSpec& spec, int steps, std::size_t operations) {
   const auto start = Clock::now();
   for (std::size_t index = 0; index < operations; ++index) {
@@ -194,6 +227,7 @@ int main(int argc, char** argv) {
   std::size_t surface_operations = 1'000'000;
   std::size_t lsm_paths = 200'000;
   std::size_t lsm_steps = 50;
+  bool convergence = false;
   int binomial_steps = 500;
   std::size_t binomial_operations = 200;
   std::size_t mc_paths = 200'000;
@@ -211,6 +245,8 @@ int main(int argc, char** argv) {
       binomial_operations = 20;
       mc_paths = 50'000;
       mc_runs = 5;
+    } else if (argument == "--convergence") {
+      convergence = true;
     } else if (argument == "--help" || argument == "-h") {
       std::printf("usage: %s [--quick]\n", argv[0]);
       return 0;
@@ -229,6 +265,9 @@ int main(int argc, char** argv) {
   run_svi(svi_operations);
   run_surface(surface_operations);
   run_lsm(lsm_paths, lsm_steps);
+  if (convergence) {
+    run_lsm_convergence();
+  }
 
   OptionSpec american;
   american.type = OptionType::Put;

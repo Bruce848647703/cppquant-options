@@ -27,6 +27,10 @@ All notable changes to this project are documented here.
 - LSM tests against a 1,000-step binomial tree, including dividend-paying calls
   and zero-volatility/expiry edge cases.
 - LSM benchmark and mathematical notes.
+- European-payoff control variate for LSM, estimated on antithetic pair
+  averages and applied with a known Black-Scholes expectation.
+- LSM standard-error, path-count convergence and basis-degree tests.
+- `--convergence` LSM benchmark table and updated accuracy notes.
 
 ### Planned
 

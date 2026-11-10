@@ -48,6 +48,50 @@ basis.
 
 A 95% interval is approximately `price +/- 1.96 * standard_error`.
 
+## Control variate
+
+The European payoff is used as a control variate. For each path, let `Y` be the
+discounted American cashflow and `X` the discounted European payoff at maturity.
+The Black-Scholes price gives the known expectation `E[X]`.
+
+```text
+beta = Cov(Y, X) / Var(X)
+Y*   = Y - beta (X - E[X])
+```
+
+When antithetic variates are enabled, pair averages of `Y` and `X` are formed
+before estimating `beta`, so the control reduces the variance of the estimator
+that is actually reported.
+
+At 200,000 paths and 50 exercise steps on the ATM American put:
+
+| Estimator | Price | Standard error |
+| --- | ---: | ---: |
+| Plain, no antithetic, no control | 6.0499 | 0.0160 |
+| Antithetic only | 6.0531 | 0.0098 |
+| Antithetic + control | 6.0523 | 0.0083 |
+
+The combined estimator reduces the standard error by about 48% versus plain
+Monte Carlo, and by about 15% on top of antithetic variates alone. `beta` is
+around 0.35. The control variate reduces noise, not the discretization or
+regression bias.
+
+## Convergence
+
+`options_bench --convergence` runs the ATM American put at 10k, 50k, 200k and
+1M paths:
+
+| Paths | Antithetic only price / SE | Antithetic + control price / SE |
+| ---: | ---: | ---: |
+| 10,000 | 6.0167 / 0.0436 | 6.0529 / 0.0375 |
+| 50,000 | 6.0398 / 0.0196 | 6.0432 / 0.0167 |
+| 200,000 | 6.0531 / 0.0098 | 6.0523 / 0.0083 |
+| 1,000,000 | 6.0558 / 0.0044 | 6.0563 / 0.0037 |
+
+The 1,000-step binomial reference is 6.0896. The remaining gap is mostly the
+discrete exercise grid and in-sample regression bias; increasing
+`exercise_steps` reduces the first source.
+
 ## API
 
 ```cpp
@@ -103,8 +147,10 @@ regression bias.
 ## Limitations
 
 - Regression uses a low-degree polynomial in `S/K`; no Laguerre or spline basis.
+  Degree 1 is noticeably less accurate than degrees 2 and 3.
 - In-sample regression introduces a small bias.
-- No control variate yet (planned for W4).
+- The control variate is the European terminal payoff; it reduces noise but not
+  discretization or regression bias.
 - Exercise dates are uniform; no discrete dividends or event dates.
 - Memory is `O(effective_paths * (exercise_steps + 1))`.
 - The reported standard error does not include discretization or regression
