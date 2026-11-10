@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased]
+## [0.5.0] - 2026-11-11
 
 ### Added
 
@@ -49,6 +49,8 @@ All notable changes to this project are documented here.
 - Barrier tests against independent reflection integrals, knockout limits,
   zero volatility, Greeks and PDE prices.
 - Barrier benchmark and `docs/BARRIER.md`.
+- Final release benchmark refresh, package version 0.5.0, and release notes
+  covering SVI, surfaces, LSM, PDE, local volatility and barriers.
 
 ### Fixed
 

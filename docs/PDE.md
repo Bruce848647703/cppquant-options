@@ -179,5 +179,5 @@ within 1%.
 
 `options_bench` prices the ATM European call on a 400 × 400 grid in about
 0.85 ms per price (1.2k prices/s) on the reference machine. The Dupire local-vol
-path takes about 7.0 ms per price on the same grid because it evaluates the
+path takes about 6.4 ms per price on the same grid because it evaluates the
 surface at every node and time step.

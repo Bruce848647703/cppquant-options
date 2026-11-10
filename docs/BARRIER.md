@@ -112,9 +112,9 @@ On the 400 x 400 grid:
 
 | Workload | Operations | Latency | Throughput |
 | --- | ---: | ---: | ---: |
-| Analytic down-and-out price | 200,000 | 50.9 ns/op | 19.6 M ops/s |
-| Price + delta + vega | 200,000 | 264 ns/op | 3.8 M ops/s |
-| PDE down-and-out | 200 | 0.94 ms/price | 1.1 k prices/s |
+| Analytic down-and-out price | 200,000 | 49.4 ns/op | 20.2 M ops/s |
+| Price + delta + vega | 200,000 | 256 ns/op | 3.9 M ops/s |
+| PDE down-and-out | 200 | 0.87 ms/price | 1.15 k prices/s |
 
 ## Limitations
 

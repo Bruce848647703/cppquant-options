@@ -325,18 +325,18 @@ Reference numbers from an Apple M-series laptop (Apple clang 21, `-O3`):
 
 | Workload | Volume | Latency | Throughput |
 | --- | ---: | ---: | ---: |
-| Black-Scholes price + Greeks | 1,024,000 options | 80 ns/option | 12.5 M options/s |
-| Implied volatility | 20,000 options | 379 ns/option | 2.6 M options/s |
-| SVI calibration, 25 quotes | 2,000 fits | 17.4 µs/fit | 57.6 k fits/s |
-| Surface price + IV, 4 slices | 1,000,000 ops | 81.3 ns/op | 12.3 M ops/s |
-| LSM American put | 200,000 paths × 50 steps | 331 ms | 0.60 M paths/s |
-| PDE Crank-Nicolson | 400 × 400 grid | 0.85 ms/price | 1.2 k prices/s |
-| PDE Dupire local vol | 400 × 400 grid | 7.0 ms/price | 143 prices/s |
-| Barrier analytic price | 200,000 prices | 51 ns/price | 19.6 M prices/s |
-| Barrier price + delta + vega | 200,000 prices | 264 ns/price | 3.8 M prices/s |
-| PDE barrier down-and-out | 400 × 400 grid | 0.94 ms/price | 1.1 k prices/s |
-| Binomial American, 500 steps | 200 prices | 106 µs/price | 9.5 k prices/s |
-| Monte Carlo, 200,000 paths | 20 runs | 3.0 ms/run | 66 M paths/s |
+| Black-Scholes price + Greeks | 1,024,000 options | 70 ns/option | 14.3 M options/s |
+| Implied volatility | 20,000 options | 375 ns/option | 2.7 M options/s |
+| SVI calibration, 25 quotes | 2,000 fits | 16.5 µs/fit | 60.5 k fits/s |
+| Surface price + IV, 4 slices | 1,000,000 ops | 76.1 ns/op | 13.1 M ops/s |
+| LSM American put | 200,000 paths × 50 steps | 354 ms | 0.60 M paths/s |
+| PDE Crank-Nicolson | 400 × 400 grid | 0.87 ms/price | 1.2 k prices/s |
+| PDE Dupire local vol | 400 × 400 grid | 6.4 ms/price | 157 prices/s |
+| Barrier analytic price | 200,000 prices | 49 ns/price | 20.2 M prices/s |
+| Barrier price + delta + vega | 200,000 prices | 256 ns/price | 3.9 M prices/s |
+| PDE barrier down-and-out | 400 × 400 grid | 0.87 ms/price | 1.2 k prices/s |
+| Binomial American, 500 steps | 200 prices | 107 µs/price | 9.3 k prices/s |
+| Monte Carlo, 200,000 paths | 20 runs | 3.25 ms/run | 61.5 M paths/s |
 
 These are indicative; run the benchmark on your own hardware.
 

@@ -5,18 +5,18 @@ Reference environment: Apple M-series (arm64), Apple clang 21.0.0,
 
 | Workload | Volume | Latency | Throughput |
 | --- | ---: | ---: | ---: |
-| Black-Scholes price + Greeks | 1,024,000 options | 80.3 ns/option | 12.46 M options/s |
-| Implied volatility | 20,000 options | 379 ns/option | 2.64 M options/s |
-| SVI calibration, 25 quotes | 2,000 fits | 17.4 µs/fit | 57.6 k fits/s |
-| Surface price + IV, 4 slices | 1,000,000 ops | 81.3 ns/op | 12.3 M ops/s |
-| LSM American put | 200,000 paths × 50 steps | 331 ms | 0.60 M paths/s |
-| PDE Crank-Nicolson | 400 × 400 grid | 0.85 ms/price | 1.2 k prices/s |
-| PDE Dupire local vol | 400 × 400 grid | 7.0 ms/price | 143 prices/s |
-| Barrier analytic price | 200,000 prices | 51 ns/price | 19.6 M prices/s |
-| Barrier price + delta + vega | 200,000 prices | 264 ns/price | 3.8 M prices/s |
-| PDE barrier down-and-out | 400 × 400 grid | 0.94 ms/price | 1.1 k prices/s |
-| Binomial American, 500 steps | 200 prices | 105.7 µs/price | 9.5 k prices/s |
-| Monte Carlo, 200,000 paths | 20 runs | 3.03 ms/run | 66.0 M paths/s |
+| Black-Scholes price + Greeks | 1,024,000 options | 70.0 ns/option | 14.28 M options/s |
+| Implied volatility | 20,000 options | 375 ns/option | 2.66 M options/s |
+| SVI calibration, 25 quotes | 2,000 fits | 16.5 µs/fit | 60.5 k fits/s |
+| Surface price + IV, 4 slices | 1,000,000 ops | 76.1 ns/op | 13.14 M ops/s |
+| LSM American put | 200,000 paths × 50 steps | 354 ms | 0.60 M paths/s |
+| PDE Crank-Nicolson | 400 × 400 grid | 0.87 ms/price | 1.2 k prices/s |
+| PDE Dupire local vol | 400 × 400 grid | 6.4 ms/price | 157 prices/s |
+| Barrier analytic price | 200,000 prices | 49 ns/price | 20.2 M prices/s |
+| Barrier price + delta + vega | 200,000 prices | 256 ns/price | 3.9 M prices/s |
+| PDE barrier down-and-out | 400 × 400 grid | 0.87 ms/price | 1.2 k prices/s |
+| Binomial American, 500 steps | 200 prices | 107.1 µs/price | 9.3 k prices/s |
+| Monte Carlo, 200,000 paths | 20 runs | 3.25 ms/run | 61.46 M paths/s |
 
 Commands:
 
@@ -103,7 +103,7 @@ The PDE benchmark prices an ATM European call with Rannacher smoothing on a
 
 | Grid | Operations | Latency | Throughput |
 | ---: | ---: | ---: | ---: |
-| 400 × 400 | 500 prices | 0.85 ms/price | 1.2 k prices/s |
+| 400 × 400 | 500 prices | 0.87 ms/price | 1.2 k prices/s |
 
 European error versus Black-Scholes:
 
@@ -127,9 +127,9 @@ rather than the tridiagonal solve.
 
 | Grid | Operations | Latency | Throughput | Floored points |
 | ---: | ---: | ---: | ---: | ---: |
-| 400 × 400 | 101 prices | 7.0 ms/price | 143 prices/s | 0 |
+| 400 × 400 | 101 prices | 6.36 ms/price | 157 prices/s | 0 |
 
-The constant-volatility PDE runs at about 1 ms on the same grid, so local
+The constant-volatility PDE runs at about 0.87 ms on the same grid, so local
 variance adds roughly 7x. The flat surface reproduces Black-Scholes within `2e-3` on an
 800 × 800 grid; a two-slice term structure integrates to the same total
 variance.
@@ -142,9 +142,9 @@ places the barrier on the lower grid boundary.
 
 | Workload | Operations | Latency | Throughput |
 | --- | ---: | ---: | ---: |
-| Analytic price | 200,000 | 50.9 ns/op | 19.6 M ops/s |
-| Price + delta + vega | 200,000 | 264 ns/op | 3.8 M ops/s |
-| PDE, 400 × 400 | 200 | 0.94 ms/price | 1.1 k prices/s |
+| Analytic price | 200,000 | 49.4 ns/op | 20.2 M ops/s |
+| Price + delta + vega | 200,000 | 256 ns/op | 3.9 M ops/s |
+| PDE, 400 × 400 | 200 | 0.87 ms/price | 1.15 k prices/s |
 
 The 800 × 800 PDE agrees with the analytic price within `7e-4` across barriers
 from 60 to 99. A barrier near zero recovers the vanilla Black-Scholes price.
