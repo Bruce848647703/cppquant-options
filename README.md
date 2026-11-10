@@ -20,6 +20,8 @@ reduction. No third-party dependencies.
 - **American Monte Carlo**: Longstaff-Schwartz regression on in-the-money
   paths, antithetic variates, a European-payoff control variate and comparison
   with the binomial tree.
+- **Crank-Nicolson PDE**: uniform spot grid, Rannacher smoothing, American
+  exercise projection and finite-difference delta/gamma.
 - **Binomial CRR tree** for European and American options, including early
   exercise with dividends.
 - **Monte Carlo** for European options with antithetic variates, a
@@ -161,6 +163,22 @@ const auto result = longstaff_schwartz_price(american, settings);
 See [docs/LSM.md](docs/LSM.md) for the regression setup, exercise policy and
 accuracy notes.
 
+### Crank-Nicolson PDE
+
+```cpp
+#include "cppquant/pde.hpp"
+
+PdeSettings settings;
+settings.space_steps = 400;
+settings.time_steps = 400;
+
+const PdeResult result = crank_nicolson_price(american, settings);
+// result.price, result.delta, result.gamma
+```
+
+See [docs/PDE.md](docs/PDE.md) for the discretization, boundaries and
+convergence table.
+
 ## Command-line pricer
 
 ```bash
@@ -210,6 +228,7 @@ Reference numbers from an Apple M-series laptop (Apple clang 21, `-O3`):
 | SVI calibration, 25 quotes | 2,000 fits | 17.4 µs/fit | 57.6 k fits/s |
 | Surface price + IV, 4 slices | 1,000,000 ops | 81.3 ns/op | 12.3 M ops/s |
 | LSM American put | 200,000 paths × 50 steps | 331 ms | 0.60 M paths/s |
+| PDE Crank-Nicolson | 400 × 400 grid | 0.85 ms/price | 1.2 k prices/s |
 | Binomial American, 500 steps | 200 prices | 106 µs/price | 9.5 k prices/s |
 | Monte Carlo, 200,000 paths | 20 runs | 3.0 ms/run | 66 M paths/s |
 
@@ -230,6 +249,8 @@ These are indicative; run the benchmark on your own hardware.
   standard errors on the tested put and dividend-paying call.
 - Adding the European control variate cuts the LSM standard error by about 48%
   versus plain no-variance-reduction Monte Carlo at 200,000 paths.
+- The Crank-Nicolson solver reaches `1e-4` European accuracy on a 3,000-node
+  grid and matches the binomial tree within 1% for American options.
 - Monte Carlo uses the sample standard error of the estimator after variance
   reduction. Antithetic pairs are averaged before estimating the control
   variate, so both techniques reduce the variance of the reported estimator.
@@ -248,6 +269,7 @@ src/monte_carlo.cpp            GBM sampling, antithetic + control variate
 src/svi.cpp                    raw SVI calibration
 src/surface.cpp                surface interpolation, pricing and checks
 src/american_mc.cpp            Longstaff-Schwartz American Monte Carlo
+src/pde.cpp                    Crank-Nicolson finite differences
 examples/option_pricer.cpp     CLI
 ```
 
@@ -267,7 +289,7 @@ recursion and the variance-reduction details.
 ## Tests
 
 The repository ships a tiny header-only test harness, so the build has no
-external test dependency. The 61 tests cover:
+external test dependency. The 70 tests cover:
 
 - three sets of reference prices and Greeks (ATM, dividends, negative rates);
 - put-call parity and finite-difference checks of every Greek;
@@ -284,7 +306,9 @@ external test dependency. The 61 tests cover:
 - LSM American put/call accuracy, reproducibility, antithetic rounding, zero
   volatility, expiry, immediate exercise and invalid settings;
 - control-variate standard-error reduction, path-count convergence and basis
-  degree comparisons.
+  degree comparisons;
+- Crank-Nicolson European/american accuracy, convergence, Greeks, expiry and
+  zero-volatility fallback.
 
 ```bash
 ./build/options_tests             # all tests

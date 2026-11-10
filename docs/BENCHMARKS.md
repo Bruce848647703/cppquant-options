@@ -10,6 +10,7 @@ Reference environment: Apple M-series (arm64), Apple clang 21.0.0,
 | SVI calibration, 25 quotes | 2,000 fits | 17.4 µs/fit | 57.6 k fits/s |
 | Surface price + IV, 4 slices | 1,000,000 ops | 81.3 ns/op | 12.3 M ops/s |
 | LSM American put | 200,000 paths × 50 steps | 331 ms | 0.60 M paths/s |
+| PDE Crank-Nicolson | 400 × 400 grid | 0.85 ms/price | 1.2 k prices/s |
 | Binomial American, 500 steps | 200 prices | 105.7 µs/price | 9.5 k prices/s |
 | Monte Carlo, 200,000 paths | 20 runs | 3.03 ms/run | 66.0 M paths/s |
 
@@ -91,8 +92,30 @@ Carlo and by about 15% on top of antithetic variates alone.
 The control variate reduces noise, not the discrete-exercise or in-sample
 regression bias.
 
+## W5: Crank-Nicolson PDE
+
+The PDE benchmark prices an ATM European call with Rannacher smoothing on a
+400 × 400 grid.
+
+| Grid | Operations | Latency | Throughput |
+| ---: | ---: | ---: | ---: |
+| 400 × 400 | 500 prices | 0.85 ms/price | 1.2 k prices/s |
+
+European error versus Black-Scholes:
+
+| Grid | Error |
+| ---: | ---: |
+| 100 × 100 | 2.8e-2 |
+| 200 × 200 | 6.9e-3 |
+| 400 × 400 | 1.7e-3 |
+| 800 × 800 | 4.3e-4 |
+| 1,600 × 1,600 | 1.1e-4 |
+
+The error scales as O(dS^2). The tests use a 3,000-node grid for the `1e-4`
+accuracy check. American prices are within 1% of a 1,000-step binomial tree.
+
 ## Planned baselines
 
-- W5: Crank-Nicolson PDE grid size versus error and runtime.
+- W6: Dupire local-vol PDE and surface diagnostics.
 - W5: PDE grid size versus error and runtime.
 - W6: Dupire local-vol build time.

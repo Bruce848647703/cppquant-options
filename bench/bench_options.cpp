@@ -1,5 +1,6 @@
 #include "cppquant/american_mc.hpp"
 #include "cppquant/options.hpp"
+#include "cppquant/pde.hpp"
 #include "cppquant/surface.hpp"
 #include "cppquant/volatility.hpp"
 
@@ -192,6 +193,33 @@ void run_lsm_convergence() {
   }
 }
 
+void run_pde(std::size_t space_steps, std::size_t time_steps,
+             std::size_t operations) {
+  OptionSpec spec{OptionType::Call,
+                  ExerciseStyle::European,
+                  100.0,
+                  100.0,
+                  1.0,
+                  0.2,
+                  0.05,
+                  0.0};
+  PdeSettings settings;
+  settings.space_steps = space_steps;
+  settings.time_steps = time_steps;
+
+  const auto start = Clock::now();
+  for (std::size_t index = 0; index < operations; ++index) {
+    const auto result = crank_nicolson_price(spec, settings);
+    sink += result.price + result.delta + result.gamma;
+  }
+  const double seconds = seconds_since(start);
+  std::printf("PDE Crank-Nicolson (%zux%zu) %7zu prices  %8.2f us/price  %6.1f "
+              "k prices/s\n",
+              space_steps, time_steps, operations,
+              seconds * 1e6 / static_cast<double>(operations),
+              static_cast<double>(operations) / seconds / 1e3);
+}
+
 void run_binomial(const OptionSpec& spec, int steps, std::size_t operations) {
   const auto start = Clock::now();
   for (std::size_t index = 0; index < operations; ++index) {
@@ -227,6 +255,9 @@ int main(int argc, char** argv) {
   std::size_t surface_operations = 1'000'000;
   std::size_t lsm_paths = 200'000;
   std::size_t lsm_steps = 50;
+  std::size_t pde_space = 400;
+  std::size_t pde_time = 400;
+  std::size_t pde_operations = 500;
   bool convergence = false;
   int binomial_steps = 500;
   std::size_t binomial_operations = 200;
@@ -242,6 +273,9 @@ int main(int argc, char** argv) {
       surface_operations = 100'000;
       lsm_paths = 50'000;
       lsm_steps = 25;
+      pde_space = 100;
+      pde_time = 100;
+      pde_operations = 50;
       binomial_operations = 20;
       mc_paths = 50'000;
       mc_runs = 5;
@@ -265,6 +299,7 @@ int main(int argc, char** argv) {
   run_svi(svi_operations);
   run_surface(surface_operations);
   run_lsm(lsm_paths, lsm_steps);
+  run_pde(pde_space, pde_time, pde_operations);
   if (convergence) {
     run_lsm_convergence();
   }

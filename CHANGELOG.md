@@ -31,6 +31,10 @@ All notable changes to this project are documented here.
   averages and applied with a known Black-Scholes expectation.
 - LSM standard-error, path-count convergence and basis-degree tests.
 - `--convergence` LSM benchmark table and updated accuracy notes.
+- Crank-Nicolson PDE solver with Rannacher smoothing, Dirichlet boundaries,
+  American exercise projection and finite-difference delta/gamma.
+- Spot-aligned grid, tridiagonal Thomas solver and European/american PDE tests.
+- PDE convergence study, benchmark and `docs/PDE.md`.
 
 ### Planned
 
