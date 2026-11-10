@@ -214,3 +214,94 @@ TEST(surface_implied_volatility_matches_each_slice) {
                slice.implied_volatility(k), 1e-12);
   }
 }
+
+TEST(surface_local_variance_of_a_flat_surface_is_the_implied_variance) {
+  const double volatility = 0.25;
+  const VolatilitySurface surface = flat_surface(100.0, 0.05, 0.02, volatility);
+
+  for (const double time : {0.25, 0.5, 1.0, 2.0}) {
+    for (const double strike : {70.0, 85.0, 100.0, 115.0, 130.0}) {
+      CHECK_NEAR(surface.local_variance(strike, time), volatility * volatility,
+                 1e-10);
+      CHECK_NEAR(surface.local_volatility(strike, time), volatility, 1e-10);
+    }
+  }
+}
+
+TEST(surface_local_variance_follows_a_term_structure) {
+  const SviParameters low{0.04 * 0.5, 0.0, 0.0, 0.0, 0.1};
+  const SviParameters high{0.09 * 1.0, 0.0, 0.0, 0.0, 0.1};
+  std::vector<SurfaceSlice> slices{
+      SurfaceSlice{SviSlice{100.0, 0.5, low}, 1.0},
+      SurfaceSlice{SviSlice{100.0, 1.0, high}, 1.0},
+  };
+  const VolatilitySurface surface(std::move(slices));
+
+  const double expected = (0.09 * 1.0 - 0.04 * 0.5) / (1.0 - 0.5);
+  for (const double time : {0.5, 0.75, 1.0}) {
+    CHECK_NEAR(surface.local_variance(100.0, time), expected, 1e-12);
+    CHECK_NEAR(surface.local_volatility(100.0, time), std::sqrt(expected),
+               1e-12);
+  }
+}
+
+TEST(surface_local_volatility_floors_negative_variance) {
+  const SviParameters high{0.09 * 0.5, 0.0, 0.0, 0.0, 0.1};
+  const SviParameters low{0.04 * 1.0, 0.0, 0.0, 0.0, 0.1};
+  std::vector<SurfaceSlice> slices{
+      SurfaceSlice{SviSlice{100.0, 0.5, high}, 1.0},
+      SurfaceSlice{SviSlice{100.0, 1.0, low}, 1.0},
+  };
+  const VolatilitySurface surface(std::move(slices));
+
+  CHECK(surface.local_variance(100.0, 0.75) < 0.0);
+  CHECK_NEAR(surface.local_volatility(100.0, 0.75, 1e-4), 0.01, 1e-12);
+}
+
+TEST(surface_local_variance_validates_inputs) {
+  const SviParameters parameters{0.04, 0.0, 0.0, 0.0, 0.1};
+  std::vector<SurfaceSlice> single{
+      SurfaceSlice{SviSlice{100.0, 1.0, parameters}, 0.95},
+  };
+  const VolatilitySurface one_slice(std::move(single));
+  CHECK_THROW(one_slice.local_variance(100.0, 1.0), std::domain_error);
+
+  const VolatilitySurface surface = flat_surface(100.0, 0.05, 0.0, 0.2);
+  CHECK_THROW(surface.local_variance(0.0, 1.0), std::invalid_argument);
+  CHECK_THROW(surface.local_variance(-10.0, 1.0), std::invalid_argument);
+  CHECK_NEAR(surface.local_variance(100.0, 0.1), 0.04, 1e-10);
+  CHECK_NEAR(surface.local_variance(100.0, 0.0), 0.04, 1e-10);
+  CHECK_THROW(surface.local_variance(100.0, -0.1), std::invalid_argument);
+  CHECK_THROW(surface.local_variance(100.0, 3.0), std::domain_error);
+  CHECK_THROW(surface.local_volatility(100.0, 1.0, 0.0), std::invalid_argument);
+}
+
+TEST(surface_local_variance_matches_numerical_dupire) {
+  std::vector<SurfaceSlice> slices;
+  for (const double time : {0.5, 1.0, 2.0}) {
+    const SviParameters parameters{0.01 * time, 0.12 * time, -0.4, 0.0, 0.15};
+    slices.push_back(SurfaceSlice{SviSlice{100.0, time, parameters}, 1.0});
+  }
+  const VolatilitySurface surface(std::move(slices));
+
+  const double time = 1.0;
+  const double dt = 1e-4;
+  for (const double strike : {80.0, 90.0, 100.0, 110.0, 120.0}) {
+    const double price = surface.price(strike, time, OptionType::Call);
+    const double time_up = surface.price(strike, time + dt, OptionType::Call);
+    const double time_down = surface.price(strike, time - dt, OptionType::Call);
+    const double dc_dt = (time_up - time_down) / (2.0 * dt);
+
+    const double step = 0.01 * strike;
+    const double strike_up =
+        surface.price(strike + step, time, OptionType::Call);
+    const double strike_down =
+        surface.price(strike - step, time, OptionType::Call);
+    const double d2c_dk2 =
+        (strike_up - 2.0 * price + strike_down) / (step * step);
+
+    const double numerical = dc_dt / (0.5 * strike * strike * d2c_dk2);
+    const double analytic = surface.local_variance(strike, time);
+    CHECK_NEAR(analytic, numerical, 0.02 * numerical);
+  }
+}

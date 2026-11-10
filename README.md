@@ -7,6 +7,73 @@ reduction. No third-party dependencies.
 
 [![CI](https://github.com/Bruce848647703/cppquant-options/actions/workflows/ci.yml/badge.svg)](https://github.com/Bruce848647703/cppquant-options/actions/workflows/ci.yml)
 
+## What the calibration actually does
+
+`demo/` generates a synthetic arbitrage-free SVI chain, calibrates every expiry,
+and scores the result on strikes that were held out of the fit. The whole
+experiment is reproducible:
+
+```bash
+make -C demo demo            # build, run, plot
+make -C demo demo PYTHON=python   # if python3 lacks matplotlib
+```
+
+![Calibrated surface](demo/outputs/fig_surface.png)
+
+![Residuals](demo/outputs/fig_residuals.png)
+
+![Weighting and sample-size sweeps](demo/outputs/fig_sweep.png)
+
+Setup: four expiries (0.25–2.0 years), 21 strikes per expiry over
+log-moneyness `[-0.6, 0.4]`, zero-mean Gaussian noise added to implied
+volatility. Raw numbers are in `demo/outputs/*.csv`.
+
+### Weighting is a bias-variance trade-off
+
+Out-of-sample RMSE on held-out strikes, in volatility points:
+
+| quote noise | uniform | vega | wing |
+| --- | --- | --- | --- |
+| 0.0 | 0.00 | 0.07 | 0.00 |
+| 0.2 | 0.18 | 0.39 | 0.18 |
+| 0.4 | 0.30 | 0.36 | 0.27 |
+| 0.8 | 0.65 | 0.61 | 0.56 |
+| 1.6 | 1.32 | 0.95 | 1.03 |
+
+Vega weighting suppresses the wings, so it is biased exactly where vega is
+small; uniform weighting is unbiased but amplifies noise. The crossover is
+around 0.7 volatility points of quote noise, and no choice dominates.
+
+### Sparse slices overfit
+
+Median out-of-sample error against the clean surface at 0.4 volatility points
+of noise:
+
+| quotes per expiry | in-sample | out-of-sample | draws off by >5 vol pts |
+| --- | --- | --- | --- |
+| 5 | 0.37 | 1.60 | 15.0% |
+| 7 | 0.32 | 0.64 | 17.5% |
+| 9 | 0.29 | 0.47 | 2.5% |
+| 13 | 0.24 | 0.27 | 0.0% |
+| 17 | 0.22 | 0.20 | 0.0% |
+
+In-sample error is flat at 0.2–0.4 volatility points regardless of how few
+strikes are used. Out-of-sample error falls about eight-fold from 5 to 17
+quotes, and with 5–7 quotes roughly one draw in six is off by more than 5
+volatility points. Five quotes is the parameter count: it identifies a slice,
+it does not constrain it.
+
+### Limitations
+
+- The synthetic chain is generated *by* raw SVI, so the zero-noise case is
+  exact by construction. These numbers measure estimator behaviour, not model
+  misspecification on real quotes.
+- The term structure is imposed, not estimated.
+- The convergence flag is strict; some fits hit the iteration cap with
+  negligible accuracy loss (see `all_converged` in the CSVs).
+- Arbitrage checks are evaluated on a grid over `[-1, 1]` log-moneyness, not
+  globally.
+
 ## Features
 
 - **Black-Scholes-Merton** prices and analytic Greeks for European calls and
@@ -17,6 +84,8 @@ reduction. No third-party dependencies.
   weighted least squares with a Levenberg-Marquardt optimizer.
 - **Volatility surface**: multi-expiry SVI interpolation in total variance and
   log-forward, with calendar and butterfly arbitrage checks.
+- **Dupire local volatility**: local variance and volatility from the surface,
+  with diagnostics for negative density and a local-vol Crank-Nicolson PDE.
 - **American Monte Carlo**: Longstaff-Schwartz regression on in-the-money
   paths, antithetic variates, a European-payoff control variate and comparison
   with the binomial tree.
@@ -39,6 +108,13 @@ Requirements: a C++20 compiler and CMake 3.20+. Ninja is optional.
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
+```
+
+The plotting demo additionally needs `matplotlib` and `pandas`:
+
+```bash
+pip install -r demo/requirements.txt
+make -C demo demo
 ```
 
 Sanitizer build:
@@ -135,6 +211,9 @@ VolatilitySurface surface(std::move(slices));
 const double vol = surface.implied_volatility(100.0, 0.75);
 const double call = surface.price(105.0, 0.75, OptionType::Call);
 const bool clean = surface.is_arbitrage_free();
+
+const double local_var = surface.local_variance(105.0, 0.75);
+const double local_vol = surface.local_volatility(105.0, 0.75);
 ```
 
 Total variance, log-forward and log-discount are interpolated in time. Queries
@@ -174,10 +253,14 @@ settings.time_steps = 400;
 
 const PdeResult result = crank_nicolson_price(american, settings);
 // result.price, result.delta, result.gamma
+
+const PdeResult local =
+    crank_nicolson_local_vol_price(american, surface, settings);
+// local.clamped_local_variance_points counts floored variance evaluations
 ```
 
-See [docs/PDE.md](docs/PDE.md) for the discretization, boundaries and
-convergence table.
+See [docs/PDE.md](docs/PDE.md) for the discretization, boundaries, local-vol
+path and convergence table.
 
 ## Command-line pricer
 
@@ -229,6 +312,7 @@ Reference numbers from an Apple M-series laptop (Apple clang 21, `-O3`):
 | Surface price + IV, 4 slices | 1,000,000 ops | 81.3 ns/op | 12.3 M ops/s |
 | LSM American put | 200,000 paths × 50 steps | 331 ms | 0.60 M paths/s |
 | PDE Crank-Nicolson | 400 × 400 grid | 0.85 ms/price | 1.2 k prices/s |
+| PDE Dupire local vol | 400 × 400 grid | 7.0 ms/price | 143 prices/s |
 | Binomial American, 500 steps | 200 prices | 106 µs/price | 9.5 k prices/s |
 | Monte Carlo, 200,000 paths | 20 runs | 3.0 ms/run | 66 M paths/s |
 
@@ -251,6 +335,9 @@ These are indicative; run the benchmark on your own hardware.
   versus plain no-variance-reduction Monte Carlo at 200,000 paths.
 - The Crank-Nicolson solver reaches `1e-4` European accuracy on a 3,000-node
   grid and matches the binomial tree within 1% for American options.
+- The local-vol PDE reproduces Black-Scholes within `2e-3` on an 800 × 800
+  grid for a flat surface, matches the total variance of a two-slice term
+  structure and reproduces a skewed SVI surface price within `2e-3`.
 - Monte Carlo uses the sample standard error of the estimator after variance
   reduction. Antithetic pairs are averaged before estimating the control
   variate, so both techniques reduce the variance of the reported estimator.
@@ -269,8 +356,9 @@ src/monte_carlo.cpp            GBM sampling, antithetic + control variate
 src/svi.cpp                    raw SVI calibration
 src/surface.cpp                surface interpolation, pricing and checks
 src/american_mc.cpp            Longstaff-Schwartz American Monte Carlo
-src/pde.cpp                    Crank-Nicolson finite differences
+src/pde.cpp                    Crank-Nicolson and local-vol finite differences
 examples/option_pricer.cpp     CLI
+demo/surface_demo.cpp          calibration/no-arbitrage data generator
 ```
 
 See [docs/MATH.md](docs/MATH.md) for the formulas, the Greeks, the CRR
@@ -283,13 +371,15 @@ recursion and the variance-reduction details.
   binomial tree.
 - The CRR tree rejects parameters where the risk-neutral probability falls
   outside `[0, 1]`, rather than silently returning a misleading price.
-- There is no local/stochastic volatility, jump diffusion, discrete dividend
-  schedule or volatility-surface calibration.
+- Local volatility comes from a fitted surface; there is no stochastic
+  volatility, jump diffusion or discrete dividend schedule.
+- The local-vol PDE keeps the drift from the option's constant rate and
+  dividend yield, so the surface forwards should be consistent with them.
 
 ## Tests
 
 The repository ships a tiny header-only test harness, so the build has no
-external test dependency. The 70 tests cover:
+external test dependency. The 82 tests cover:
 
 - three sets of reference prices and Greeks (ATM, dividends, negative rates);
 - put-call parity and finite-difference checks of every Greek;
@@ -307,8 +397,11 @@ external test dependency. The 70 tests cover:
   volatility, expiry, immediate exercise and invalid settings;
 - control-variate standard-error reduction, path-count convergence and basis
   degree comparisons;
-- Crank-Nicolson European/american accuracy, convergence, Greeks, expiry and
-  zero-volatility fallback.
+- Crank-Nicolson European/american accuracy, convergence, Greeks, expiry,
+  zero-volatility fallback and deep in-the-money boundaries;
+- Dupire local variance against finite-difference Dupire prices, flat and
+  term-structure surfaces, negative-variance flooring and local-vol PDE
+  accuracy on skewed surfaces, American exercise and validation.
 
 ```bash
 ./build/options_tests             # all tests

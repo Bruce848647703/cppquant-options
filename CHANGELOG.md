@@ -35,6 +35,20 @@ All notable changes to this project are documented here.
   American exercise projection and finite-difference delta/gamma.
 - Spot-aligned grid, tridiagonal Thomas solver and European/american PDE tests.
 - PDE convergence study, benchmark and `docs/PDE.md`.
+- Dupire local variance and local volatility from an SVI surface, with
+  negative-density diagnostics and a per-point variance floor.
+- Local-volatility Crank-Nicolson PDE sharing the Rannacher start, boundaries,
+  American projection and tridiagonal solver.
+- Local-vol PDE tests for flat-surface Black-Scholes agreement, term-structure
+  total variance, skewed-surface reproduction, American puts, negative-variance
+  flooring and validation.
+- Local-vol benchmark, surface demo data generator and expanded surface/PDE
+  documentation.
+
+### Fixed
+
+- PDE boundaries now discount over time-to-expiry rather than calendar time;
+  deep in-the-money put/call tests cover both boundaries.
 
 ### Planned
 

@@ -212,6 +212,99 @@ double VolatilitySurface::butterfly_g(double log_moneyness,
          second / 2.0;
 }
 
+double VolatilitySurface::local_variance(double strike,
+                                         double time_to_expiry) const {
+  if (!std::isfinite(strike) || strike <= 0.0) {
+    throw std::invalid_argument("strike must be positive and finite");
+  }
+  if (slices_.size() < 2) {
+    throw std::domain_error("local variance requires at least two expiries");
+  }
+
+  if (!std::isfinite(time_to_expiry) || time_to_expiry < 0.0) {
+    throw std::invalid_argument("time to expiry must be non-negative");
+  }
+
+  if (time_to_expiry < minimum_time()) {
+    // Extrapolate total variance linearly from zero to the first slice:
+    // w(k, t) = (t / t_min) w(k, t_min). Differentiating in t and applying
+    // Dupire's formula gives a finite local variance, including at t = 0.
+    const double time = minimum_time();
+    const double log_moneyness = std::log(strike / forward(time));
+    const double first_variance = total_variance(log_moneyness, time);
+    if (!std::isfinite(first_variance) || first_variance <= 0.0) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    const double step = 1e-4 * std::max(1.0, std::abs(log_moneyness));
+    const double variance_minus = total_variance(log_moneyness - step, time);
+    const double variance_plus = total_variance(log_moneyness + step, time);
+    const double first = (variance_plus - variance_minus) / (2.0 * step);
+    const double second =
+        (variance_plus - 2.0 * first_variance + variance_minus) / (step * step);
+
+    const double scale = time_to_expiry / time;
+    double denominator = 0.0;
+    if (scale == 0.0) {
+      denominator = (1.0 - log_moneyness * first / (2.0 * first_variance));
+      denominator *= denominator;
+    } else {
+      const double scaled_variance = scale * first_variance;
+      const double scaled_first = scale * first;
+      const double scaled_second = scale * second;
+      denominator =
+          std::pow(1.0 - log_moneyness * scaled_first / (2.0 * scaled_variance),
+                   2.0) -
+          (scaled_first * scaled_first / 4.0) * (1.0 / scaled_variance + 0.25) +
+          scaled_second / 2.0;
+    }
+    if (!std::isfinite(denominator) || denominator <= 1e-12) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    return (first_variance / time) / denominator;
+  }
+
+  const double time = checked_time(time_to_expiry);
+  const double log_moneyness = std::log(strike / forward(time));
+  const double denominator = butterfly_g(log_moneyness, time);
+  if (!std::isfinite(denominator) || denominator <= 1e-12) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+
+  std::size_t lower = 0;
+  if (time >= slices_.back().slice.time_to_expiry) {
+    lower = slices_.size() - 2;
+  } else {
+    for (; lower + 1 < slices_.size(); ++lower) {
+      if (time <= slices_[lower + 1].slice.time_to_expiry) {
+        break;
+      }
+    }
+  }
+
+  const double left_time = slices_[lower].slice.time_to_expiry;
+  const double right_time = slices_[lower + 1].slice.time_to_expiry;
+  const double left_variance =
+      slices_[lower].slice.total_variance(log_moneyness);
+  const double right_variance =
+      slices_[lower + 1].slice.total_variance(log_moneyness);
+  const double derivative =
+      (right_variance - left_variance) / (right_time - left_time);
+  return derivative / denominator;
+}
+
+double VolatilitySurface::local_volatility(double strike, double time_to_expiry,
+                                           double floor) const {
+  if (!std::isfinite(floor) || floor <= 0.0) {
+    throw std::invalid_argument("local variance floor must be positive");
+  }
+  const double variance = local_variance(strike, time_to_expiry);
+  if (!std::isfinite(variance) || variance <= floor) {
+    return std::sqrt(floor);
+  }
+  return std::sqrt(variance);
+}
+
 bool VolatilitySurface::is_calendar_arbitrage_free(double tolerance,
                                                    int samples) const {
   if (!std::isfinite(tolerance) || tolerance < 0.0 || samples < 2) {

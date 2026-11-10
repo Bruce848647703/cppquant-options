@@ -73,11 +73,7 @@ double right_boundary(const OptionSpec& spec, double s_max,
   return european;
 }
 
-} // namespace
-
-PdeResult crank_nicolson_price(const OptionSpec& spec,
-                               const PdeSettings& settings) {
-  validate_spec(spec);
+void validate_settings(const PdeSettings& settings) {
   if (settings.space_steps < 10) {
     throw std::invalid_argument("PDE requires at least 10 space steps");
   }
@@ -87,7 +83,18 @@ PdeResult crank_nicolson_price(const OptionSpec& spec,
   if (!std::isfinite(settings.width_stddev) || settings.width_stddev <= 0.0) {
     throw std::invalid_argument("PDE grid width must be positive");
   }
+  if (!std::isfinite(settings.local_variance_floor) ||
+      settings.local_variance_floor <= 0.0) {
+    throw std::invalid_argument("local variance floor must be positive");
+  }
+}
 
+/// Shared Crank-Nicolson solver. `variance(spot, tau_remaining)` returns the
+/// instantaneous variance at a grid node. `volatility_estimate` sizes the spot
+/// grid and is not used for the coefficients.
+template <typename VarianceFunction>
+PdeResult solve_pde(const OptionSpec& spec, const PdeSettings& settings,
+                    VarianceFunction&& variance, double volatility_estimate) {
   PdeResult result;
   result.space_steps = settings.space_steps;
   result.time_steps = settings.time_steps;
@@ -99,15 +106,12 @@ PdeResult crank_nicolson_price(const OptionSpec& spec,
                         : (spec.spot < spec.strike ? -1.0 : 0.0);
     return result;
   }
-  if (spec.volatility == 0.0) {
-    result.price = binomial_price(spec, static_cast<int>(settings.time_steps));
-    return result;
-  }
 
   const double time = spec.time_to_expiry;
   const double width =
       std::max(spec.spot, spec.strike) *
-      std::exp(settings.width_stddev * spec.volatility * std::sqrt(time));
+      std::exp(settings.width_stddev * std::max(volatility_estimate, 1e-6) *
+               std::sqrt(time));
   double s_max = std::max(width, spec.spot * 1.01);
   const std::size_t space_steps = settings.space_steps;
   const std::size_t time_steps = settings.time_steps;
@@ -121,6 +125,16 @@ PdeResult crank_nicolson_price(const OptionSpec& spec,
     s_max = ds * static_cast<double>(space_steps);
   }
   const double dt = time / static_cast<double>(time_steps);
+  const double floor = settings.local_variance_floor;
+
+  auto node_variance = [&](double spot, double tau_remaining) {
+    double value = variance(spot, tau_remaining);
+    if (!std::isfinite(value) || value <= floor) {
+      ++result.clamped_local_variance_points;
+      return floor;
+    }
+    return value;
+  };
 
   struct TimeStep {
     double size{};
@@ -146,16 +160,6 @@ PdeResult crank_nicolson_price(const OptionSpec& spec,
   std::vector<double> a(space_steps + 1, 0.0);
   std::vector<double> b(space_steps + 1, 0.0);
   std::vector<double> c(space_steps + 1, 0.0);
-  for (std::size_t index = 1; index < space_steps; ++index) {
-    const double spot = static_cast<double>(index) * ds;
-    const double diffusion =
-        0.5 * spec.volatility * spec.volatility * spot * spot / (ds * ds);
-    const double convection =
-        0.5 * (spec.risk_free_rate - spec.dividend_yield) * spot / ds;
-    a[index] = diffusion - convection;
-    b[index] = -2.0 * diffusion - spec.risk_free_rate;
-    c[index] = diffusion + convection;
-  }
 
   std::vector<double> values(space_steps + 1, 0.0);
   for (std::size_t index = 0; index <= space_steps; ++index) {
@@ -166,11 +170,22 @@ PdeResult crank_nicolson_price(const OptionSpec& spec,
   double tau = 0.0;
   for (const TimeStep& step : schedule) {
     tau += step.size;
-    const double tau_remaining = time - tau;
-    const double new_left = left_boundary(spec, tau_remaining);
-    const double new_right = right_boundary(spec, s_max, tau_remaining);
+    const double tau_remaining = std::max(0.0, time - tau);
+    const double new_left = left_boundary(spec, tau);
+    const double new_right = right_boundary(spec, s_max, tau);
     const double theta = step.theta;
     const double explicit_weight = 1.0 - theta;
+
+    for (std::size_t index = 1; index < space_steps; ++index) {
+      const double spot = static_cast<double>(index) * ds;
+      const double diffusion =
+          0.5 * node_variance(spot, tau_remaining) * spot * spot / (ds * ds);
+      const double convection =
+          0.5 * (spec.risk_free_rate - spec.dividend_yield) * spot / ds;
+      a[index] = diffusion - convection;
+      b[index] = -2.0 * diffusion - spec.risk_free_rate;
+      c[index] = diffusion + convection;
+    }
 
     for (std::size_t row = 0; row < interior; ++row) {
       const std::size_t index = row + 1;
@@ -236,6 +251,71 @@ PdeResult crank_nicolson_price(const OptionSpec& spec,
       node_gamma(lower_index) +
       (node_gamma(lower_index + 1) - node_gamma(lower_index)) * weight;
   return result;
+}
+
+} // namespace
+
+PdeResult crank_nicolson_price(const OptionSpec& spec,
+                               const PdeSettings& settings) {
+  validate_spec(spec);
+  validate_settings(settings);
+
+  if (spec.time_to_expiry > 0.0 && spec.volatility == 0.0) {
+    PdeResult result;
+    result.space_steps = settings.space_steps;
+    result.time_steps = settings.time_steps;
+    result.price = binomial_price(spec, static_cast<int>(settings.time_steps));
+    return result;
+  }
+
+  const double variance = spec.volatility * spec.volatility;
+  return solve_pde(
+      spec, settings, [variance](double, double) { return variance; },
+      spec.volatility);
+}
+
+PdeResult crank_nicolson_local_vol_price(const OptionSpec& spec,
+                                         const VolatilitySurface& surface,
+                                         const PdeSettings& settings) {
+  validate_spec(spec);
+  validate_settings(settings);
+
+  if (spec.time_to_expiry == 0.0) {
+    return solve_pde(spec, settings, [](double, double) { return 0.0; }, 0.0);
+  }
+
+  if (spec.time_to_expiry > 0.0) {
+    if (surface.slices().size() < 2) {
+      throw std::domain_error(
+          "local volatility requires at least two surface expiries");
+    }
+    if (spec.time_to_expiry < surface.minimum_time() ||
+        spec.time_to_expiry > surface.maximum_time()) {
+      throw std::domain_error(
+          "option expiry is outside the surface time range");
+    }
+  }
+
+  auto local_variance = [&](double spot, double tau_remaining) {
+    return surface.local_variance(spot, std::max(0.0, tau_remaining));
+  };
+
+  // Size the grid from implied volatility rather than the local volatility in
+  // the wings. Raw SVI wings can imply local volatilities several times the ATM
+  // level; using them would make S_max huge and destroy spot resolution.
+  double volatility_estimate =
+      surface.implied_volatility(spec.strike, spec.time_to_expiry);
+  for (const auto& entry : surface.slices()) {
+    const double time = entry.slice.time_to_expiry;
+    if (time > spec.time_to_expiry) {
+      break;
+    }
+    volatility_estimate =
+        std::max(volatility_estimate,
+                 surface.implied_volatility(entry.slice.forward, time));
+  }
+
+  return solve_pde(spec, settings, local_variance, volatility_estimate);
 }
 
 } // namespace cppquant

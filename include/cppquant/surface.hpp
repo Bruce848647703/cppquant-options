@@ -52,6 +52,17 @@ public:
   /// indicate a negative risk-neutral density.
   double butterfly_g(double log_moneyness, double time_to_expiry) const;
 
+  /// Dupire local variance at a strike and expiry. Requires at least two
+  /// slices. Times below the first slice extrapolate total variance linearly
+  /// from zero. Returns NaN when the butterfly denominator is non-positive or
+  /// the time derivative cannot be formed.
+  double local_variance(double strike, double time_to_expiry) const;
+
+  /// Local volatility, floored at sqrt(floor). Non-finite or non-positive
+  /// local variance returns sqrt(floor).
+  double local_volatility(double strike, double time_to_expiry,
+                          double floor = 1e-8) const;
+
   /// Sample total variance across adjacent slices. `samples` is the number of
   /// log-moneyness points per interval (at least 2).
   bool is_calendar_arbitrage_free(double tolerance = 1e-8,

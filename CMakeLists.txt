@@ -4,6 +4,7 @@ project(cppquant_options VERSION 0.1.0 LANGUAGES CXX)
 option(CPPQUANT_BUILD_TESTS "Build the unit tests" ON)
 option(CPPQUANT_BUILD_BENCHMARKS "Build the benchmark" ON)
 option(CPPQUANT_BUILD_EXAMPLES "Build the examples" ON)
+option(CPPQUANT_BUILD_DEMO "Build the surface demo data generator" ON)
 option(CPPQUANT_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(CPPQUANT_WERROR "Treat compiler warnings as errors" OFF)
 
@@ -60,6 +61,14 @@ if(CPPQUANT_BUILD_EXAMPLES)
     cppquant_set_warnings(option_pricer)
 endif()
 
+if(CPPQUANT_BUILD_DEMO)
+    add_executable(surface_demo
+        demo/surface_demo.cpp
+    )
+    target_link_libraries(surface_demo PRIVATE cppquant::options)
+    cppquant_set_warnings(surface_demo)
+endif()
+
 if(CPPQUANT_BUILD_BENCHMARKS)
     add_executable(options_bench
         bench/bench_options.cpp
@@ -84,7 +93,9 @@ if(CPPQUANT_BUILD_TESTS)
     cppquant_set_warnings(options_tests)
 
     add_test(NAME options_tests COMMAND options_tests)
-    set_tests_properties(options_tests PROPERTIES TIMEOUT 180)
+    # The full suite includes 3,000-node PDE and local-vol grid checks; ASan
+    # builds need substantially more than the release runtime.
+    set_tests_properties(options_tests PROPERTIES TIMEOUT 900)
 
     if(TARGET option_pricer)
         add_test(NAME option_pricer_american
@@ -103,6 +114,13 @@ if(CPPQUANT_BUILD_TESTS)
     if(TARGET options_bench)
         add_test(NAME options_bench_smoke COMMAND options_bench --quick)
         set_tests_properties(options_bench_smoke PROPERTIES TIMEOUT 120)
+    endif()
+
+    if(TARGET surface_demo)
+        add_test(NAME surface_demo_smoke
+            COMMAND surface_demo ${CMAKE_CURRENT_BINARY_DIR}/surface_demo_output
+        )
+        set_tests_properties(surface_demo_smoke PROPERTIES TIMEOUT 120)
     endif()
 endif()
 

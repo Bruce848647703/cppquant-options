@@ -11,6 +11,7 @@ Reference environment: Apple M-series (arm64), Apple clang 21.0.0,
 | Surface price + IV, 4 slices | 1,000,000 ops | 81.3 ns/op | 12.3 M ops/s |
 | LSM American put | 200,000 paths × 50 steps | 331 ms | 0.60 M paths/s |
 | PDE Crank-Nicolson | 400 × 400 grid | 0.85 ms/price | 1.2 k prices/s |
+| PDE Dupire local vol | 400 × 400 grid | 7.0 ms/price | 143 prices/s |
 | Binomial American, 500 steps | 200 prices | 105.7 µs/price | 9.5 k prices/s |
 | Monte Carlo, 200,000 paths | 20 runs | 3.03 ms/run | 66.0 M paths/s |
 
@@ -114,8 +115,22 @@ European error versus Black-Scholes:
 The error scales as O(dS^2). The tests use a 3,000-node grid for the `1e-4`
 accuracy check. American prices are within 1% of a 1,000-step binomial tree.
 
+## W6: Dupire local volatility
+
+The benchmark builds a flat 20% surface with four expiries and prices the ATM
+European call through the local-vol PDE. Every interior node and time step
+queries the surface, so the cost is dominated by Dupire variance evaluation
+rather than the tridiagonal solve.
+
+| Grid | Operations | Latency | Throughput | Floored points |
+| ---: | ---: | ---: | ---: | ---: |
+| 400 × 400 | 101 prices | 7.0 ms/price | 143 prices/s | 0 |
+
+The constant-volatility PDE runs at about 1 ms on the same grid, so local
+variance adds roughly 7x. The flat surface reproduces Black-Scholes within `2e-3` on an
+800 × 800 grid; a two-slice term structure integrates to the same total
+variance.
+
 ## Planned baselines
 
-- W6: Dupire local-vol PDE and surface diagnostics.
-- W5: PDE grid size versus error and runtime.
-- W6: Dupire local-vol build time.
+- W7: barrier-option PDE and Monte Carlo.

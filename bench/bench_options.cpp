@@ -220,6 +220,45 @@ void run_pde(std::size_t space_steps, std::size_t time_steps,
               static_cast<double>(operations) / seconds / 1e3);
 }
 
+void run_local_vol_pde(std::size_t space_steps, std::size_t time_steps,
+                       std::size_t operations) {
+  std::vector<SurfaceSlice> slices;
+  for (const double time : {0.25, 0.5, 1.0, 2.0}) {
+    const double forward = 100.0 * std::exp(0.05 * time);
+    const SviParameters parameters{0.04 * time, 0.0, 0.0, 0.0, 0.1};
+    slices.push_back(SurfaceSlice{SviSlice{forward, time, parameters},
+                                  std::exp(-0.05 * time)});
+  }
+  const VolatilitySurface surface(std::move(slices));
+
+  OptionSpec spec{OptionType::Call,
+                  ExerciseStyle::European,
+                  100.0,
+                  100.0,
+                  1.0,
+                  0.2,
+                  0.05,
+                  0.0};
+  PdeSettings settings;
+  settings.space_steps = space_steps;
+  settings.time_steps = time_steps;
+
+  std::size_t clamped = 0;
+  const auto start = Clock::now();
+  for (std::size_t index = 0; index < operations; ++index) {
+    const auto result = crank_nicolson_local_vol_price(spec, surface, settings);
+    sink += result.price + result.delta + result.gamma;
+    clamped += result.clamped_local_variance_points;
+  }
+  const double seconds = seconds_since(start);
+  std::printf(
+      "PDE Dupire local vol (%zux%zu) %6zu prices  %8.2f us/price  %6.1f "
+      "prices/s  clamped=%zu\n",
+      space_steps, time_steps, operations,
+      seconds * 1e6 / static_cast<double>(operations),
+      static_cast<double>(operations) / seconds, clamped);
+}
+
 void run_binomial(const OptionSpec& spec, int steps, std::size_t operations) {
   const auto start = Clock::now();
   for (std::size_t index = 0; index < operations; ++index) {
@@ -300,6 +339,7 @@ int main(int argc, char** argv) {
   run_surface(surface_operations);
   run_lsm(lsm_paths, lsm_steps);
   run_pde(pde_space, pde_time, pde_operations);
+  run_local_vol_pde(pde_space, pde_time, pde_operations / 5 + 1);
   if (convergence) {
     run_lsm_convergence();
   }

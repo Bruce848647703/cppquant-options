@@ -89,6 +89,34 @@ linear interpolation even when both endpoints are arbitrage-free.
 
 `is_arbitrage_free` combines the calendar and butterfly checks.
 
+## Dupire local variance
+
+Dupire's formula converts the implied total-variance surface `w(k, T)` into a
+local variance:
+
+```text
+sigma_loc^2(K, T) = (dw/dT) / g(k, T)
+k = log(K / F(T))
+```
+
+`g(k, T)` is Gatheral's butterfly density function above. The implementation
+differentiates total variance in time across the two bracketing slices and
+computes `g` with the same central differences as the butterfly check.
+
+```cpp
+const double local_var = surface.local_variance(105.0, 0.75);
+const double local_vol = surface.local_volatility(105.0, 0.75);
+```
+
+`local_variance` returns `NaN` when `g` is non-positive or the denominator is
+numerically zero. `local_volatility` replaces non-finite or non-positive
+variance with `sqrt(floor)`. Both require at least two slices and a non-negative
+time. Times above the last slice throw. Below the first slice, total variance is
+extrapolated linearly from zero, `w(k, t) = (t / t_min) w(k, t_min)`, and
+Dupire's formula is applied to that extrapolated surface. This is finite at
+`t = 0` and makes the integral of local variance match the surface total
+variance at every calibrated expiry.
+
 ## API
 
 ```cpp
@@ -113,6 +141,18 @@ if (!surface.is_arbitrage_free()) {
 }
 ```
 
+## Diagnostics demo
+
+`surface_demo` builds a calendar-arbitrage-free synthetic SVI chain, adds
+configurable noise, calibrates every expiry and writes summary CSVs:
+
+```bash
+./build/surface_demo outputs
+```
+
+The output covers weight schemes, quote counts, in/out-of-sample error and
+butterfly/calendar violation rates. It only uses the public API.
+
 ## Validation and tests
 
 - A flat surface with constant total variance reproduces Black-Scholes to
@@ -126,6 +166,13 @@ if (!surface.is_arbitrage_free()) {
   arbitrage.
 - Invalid expiries, forwards, discount factors, duplicate slices, out-of-range
   queries and American options are rejected.
+- A flat surface has local variance equal to the implied variance to `1e-10`;
+  a two-slice term structure produces the expected time derivative, and a
+  decreasing-variance surface produces negative local variance which the local
+  volatility floors.
+- On a skewed SVI surface, local variance matches a finite-difference Dupire
+  calculation within 2% across strikes, including the linear extrapolation
+  below the first slice.
 
 ## Limitations
 
@@ -134,7 +181,8 @@ if (!surface.is_arbitrage_free()) {
 - Linear total-variance interpolation is simple but not guaranteed to preserve
   every no-arbitrage condition between arbitrary endpoints; the midpoint
   butterfly check catches common failures.
-- No local-volatility conversion or SSVI global parameterization yet; those
-  are planned for later milestones.
+- Local variance is piecewise constant in time between calibrated slices; it
+  is not smoothed across expiries.
+- No SSVI global parameterization yet.
 - The surface owns forwards and discount factors; it does not build them from a
   spot, rate curve or dividend schedule.
