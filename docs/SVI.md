@@ -103,7 +103,8 @@ external data.
 
 ## Limitations
 
-- One expiry per slice; the surface and calendar-arbitrage checks are W2.
+- One expiry per slice; `VolatilitySurface` adds multi-expiry interpolation,
+  calendar/butterfly checks and local variance. See `SURFACE.md`.
 - The objective is variance-space least squares. Vega-weighted or robust
   losses can be added later if real quote data requires them.
 - No bid/ask spread constraints, no penalization of extreme parameters and no

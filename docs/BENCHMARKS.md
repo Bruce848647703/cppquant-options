@@ -149,6 +149,8 @@ places the barrier on the lower grid boundary.
 The 800 × 800 PDE agrees with the analytic price within `7e-4` across barriers
 from 60 to 99. A barrier near zero recovers the vanilla Black-Scholes price.
 
-## Planned baselines
+## W8: release
 
-- W8: final release numbers.
+The W1-W7 numbers above are the final v0.5.0 baselines. The release adds no
+hot-path changes; the barrier and local-vol entries are the reference for the
+later pricing paths.

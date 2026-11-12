@@ -431,8 +431,7 @@ TEST(monte_carlo_rounds_to_even_samples_for_antithetic) {
 }
 
 TEST(monte_carlo_handles_a_two_path_run) {
-  const OptionSpec spec =
-      make_spec(OptionType::Call, 100, 100, 1.0, 0.2, 0.05);
+  const OptionSpec spec = make_spec(OptionType::Call, 100, 100, 1.0, 0.2, 0.05);
   const auto result = monte_carlo_price(spec, 2, 1);
   CHECK(std::isfinite(result.price));
   CHECK_EQ(result.effective_samples, 2u);
