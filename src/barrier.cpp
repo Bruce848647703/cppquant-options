@@ -158,13 +158,9 @@ BarrierGreeks down_and_out_greeks(const OptionSpec& spec, double barrier) {
     OptionSpec bumped = spec;
     bumped.volatility = vol_up;
     const double up_price = down_and_out_price(bumped, barrier);
-    if (vol_down == spec.volatility) {
-      result.vega = (up_price - result.price) / vol_step;
-    } else {
-      bumped.volatility = vol_down;
-      const double down_price = down_and_out_price(bumped, barrier);
-      result.vega = (up_price - down_price) / (vol_up - vol_down);
-    }
+    bumped.volatility = vol_down;
+    const double down_price = down_and_out_price(bumped, barrier);
+    result.vega = (up_price - down_price) / (vol_up - vol_down);
   }
   return result;
 }

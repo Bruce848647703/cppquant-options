@@ -49,6 +49,8 @@ All notable changes to this project are documented here.
 - Barrier tests against independent reflection integrals, knockout limits,
   zero volatility, Greeks and PDE prices.
 - Barrier benchmark and `docs/BARRIER.md`.
+- Barrier Greek tests for expired options, a zero-volatility knock-out and a
+  spot close to the barrier; removed an unreachable one-sided vega branch.
 - Final release benchmark refresh, package version 0.5.0, and release notes
   covering SVI, surfaces, LSM, PDE, local volatility and barriers.
 

@@ -45,6 +45,7 @@ TEST(barrier_analytic_matches_independent_reflection_values) {
       {OptionType::Call, 90.0, 60.0, 0.25, 16.635130216191072},
       {OptionType::Put, 90.0, 60.0, 0.25, 3.060898727852254},
       {OptionType::Call, 90.0, 95.0, 0.25, 6.462628165181819},
+      {OptionType::Put, 90.0, 95.0, 0.25, 0.0},
   };
 
   for (const auto& item : cases) {
