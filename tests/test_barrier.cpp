@@ -97,6 +97,12 @@ TEST(barrier_pde_matches_the_analytic_price) {
       CHECK_EQ(pde.clamped_local_variance_points, 0u);
     }
   }
+
+  const OptionSpec high_barrier =
+      barrier_spec(OptionType::Call, 100.0, 90.0, 1.0, 0.25);
+  const auto high_pde =
+      crank_nicolson_down_and_out_price(high_barrier, 95.0, settings);
+  CHECK_NEAR(high_pde.price, down_and_out_price(high_barrier, 95.0), 2e-3);
 }
 
 TEST(barrier_pde_recovers_vanilla_at_a_tiny_barrier) {
