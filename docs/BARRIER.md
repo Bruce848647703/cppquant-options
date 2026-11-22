@@ -91,6 +91,10 @@ settings.time_steps = 800;
 
 const PdeResult pde =
     crank_nicolson_down_and_out_price(spec, 80.0, settings);
+
+// Local-volatility diffusion from a fitted surface.
+const PdeResult local =
+    crank_nicolson_local_vol_down_and_out_price(spec, surface, 80.0, settings);
 ```
 
 On an 800 x 800 grid the PDE agrees with the analytic price within `7e-4` for
@@ -104,7 +108,8 @@ the tested barriers:
 | 99 | 1.170361 | 1.170354 | 0.000016 | 0.000014 |
 
 A barrier close to zero converges to the vanilla Black-Scholes price; a barrier
-at or above the spot returns zero.
+at or above the spot returns zero. On a flat surface the local-volatility
+barrier PDE matches the analytic price to the same tolerance.
 
 ## Benchmark
 

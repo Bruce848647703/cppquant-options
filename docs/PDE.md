@@ -80,7 +80,9 @@ c_i = 0.5 sigma_loc^2(S_i, tau) S_i^2 / dS^2
 
 The variance is evaluated at every interior node at the start of each time
 step. The tridiagonal solve, Rannacher start, boundaries and American
-projection are shared with the constant-volatility solver.
+projection are shared with the constant-volatility solver. The same local-vol
+diffusion can be combined with a down-and-out barrier through
+`crank_nicolson_local_vol_down_and_out_price`.
 
 ```cpp
 #include "cppquant/pde.hpp"

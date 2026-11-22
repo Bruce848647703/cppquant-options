@@ -275,6 +275,9 @@ OptionSpec barrier_call{OptionType::Call, ExerciseStyle::European,
 const BarrierGreeks greeks = down_and_out_greeks(barrier_call, 80.0);
 const PdeResult pde = crank_nicolson_down_and_out_price(
     barrier_call, 80.0, settings);
+const PdeResult local_pde =
+    crank_nicolson_local_vol_down_and_out_price(
+        barrier_call, surface, 80.0, settings);
 ```
 
 The analytic formulas use a continuous barrier and no rebate. The PDE places
@@ -404,7 +407,7 @@ recursion and the variance-reduction details.
 ## Tests
 
 The repository ships a tiny header-only test harness, so the build has no
-external test dependency. The 90 tests cover:
+external test dependency. The 91 tests cover:
 
 - three sets of reference prices and Greeks (ATM, dividends, negative rates);
 - put-call parity and finite-difference checks of every Greek;
@@ -428,7 +431,8 @@ external test dependency. The 90 tests cover:
   term-structure surfaces, negative-variance flooring and local-vol PDE
   accuracy on skewed surfaces, American exercise and validation;
 - down-and-out analytic prices against independent reflection integrals,
-  knockout limits, delta/vega, PDE agreement, zero volatility and validation.
+  knockout limits, delta/vega, PDE agreement, zero volatility, local-vol
+  barrier PDE and validation.
 
 ```bash
 ./build/options_tests             # all tests

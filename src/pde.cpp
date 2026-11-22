@@ -267,6 +267,40 @@ PdeResult solve_pde(const OptionSpec& spec, const PdeSettings& settings,
   return result;
 }
 
+void validate_local_vol_surface(const OptionSpec& spec,
+                                const VolatilitySurface& surface) {
+  if (spec.time_to_expiry == 0.0) {
+    return;
+  }
+  if (surface.slices().size() < 2) {
+    throw std::domain_error(
+        "local volatility requires at least two surface expiries");
+  }
+  if (spec.time_to_expiry < surface.minimum_time() ||
+      spec.time_to_expiry > surface.maximum_time()) {
+    throw std::domain_error("option expiry is outside the surface time range");
+  }
+}
+
+double local_volatility_estimate(const OptionSpec& spec,
+                                 const VolatilitySurface& surface) {
+  // Size the grid from implied volatility rather than the local volatility in
+  // the wings: raw SVI wings can imply several times ATM vol, which would make
+  // S_max huge and destroy spot resolution.
+  double volatility_estimate =
+      surface.implied_volatility(spec.strike, spec.time_to_expiry);
+  for (const auto& entry : surface.slices()) {
+    const double time = entry.slice.time_to_expiry;
+    if (time > spec.time_to_expiry) {
+      break;
+    }
+    volatility_estimate =
+        std::max(volatility_estimate,
+                 surface.implied_volatility(entry.slice.forward, time));
+  }
+  return volatility_estimate;
+}
+
 } // namespace
 
 PdeResult crank_nicolson_price(const OptionSpec& spec,
@@ -298,38 +332,13 @@ PdeResult crank_nicolson_local_vol_price(const OptionSpec& spec,
     return solve_pde(spec, settings, [](double, double) { return 0.0; }, 0.0);
   }
 
-  if (spec.time_to_expiry > 0.0) {
-    if (surface.slices().size() < 2) {
-      throw std::domain_error(
-          "local volatility requires at least two surface expiries");
-    }
-    if (spec.time_to_expiry < surface.minimum_time() ||
-        spec.time_to_expiry > surface.maximum_time()) {
-      throw std::domain_error(
-          "option expiry is outside the surface time range");
-    }
-  }
-
+  validate_local_vol_surface(spec, surface);
   auto local_variance = [&](double spot, double tau_remaining) {
     return surface.local_variance(spot, std::max(0.0, tau_remaining));
   };
 
-  // Size the grid from implied volatility rather than the local volatility in
-  // the wings. Raw SVI wings can imply local volatilities several times the ATM
-  // level; using them would make S_max huge and destroy spot resolution.
-  double volatility_estimate =
-      surface.implied_volatility(spec.strike, spec.time_to_expiry);
-  for (const auto& entry : surface.slices()) {
-    const double time = entry.slice.time_to_expiry;
-    if (time > spec.time_to_expiry) {
-      break;
-    }
-    volatility_estimate =
-        std::max(volatility_estimate,
-                 surface.implied_volatility(entry.slice.forward, time));
-  }
-
-  return solve_pde(spec, settings, local_variance, volatility_estimate);
+  return solve_pde(spec, settings, local_variance,
+                   local_volatility_estimate(spec, surface));
 }
 
 PdeResult crank_nicolson_down_and_out_price(const OptionSpec& spec,
@@ -349,6 +358,32 @@ PdeResult crank_nicolson_down_and_out_price(const OptionSpec& spec,
   return solve_pde(
       spec, settings, [variance](double, double) { return variance; },
       spec.volatility, barrier, true);
+}
+
+PdeResult crank_nicolson_local_vol_down_and_out_price(
+    const OptionSpec& spec, const VolatilitySurface& surface, double barrier,
+    const PdeSettings& settings) {
+  validate_down_and_out(spec, barrier);
+  validate_settings(settings);
+
+  if (spec.spot <= barrier) {
+    PdeResult result;
+    result.space_steps = settings.space_steps;
+    result.time_steps = settings.time_steps;
+    return result;
+  }
+
+  if (spec.time_to_expiry == 0.0) {
+    return solve_pde(
+        spec, settings, [](double, double) { return 0.0; }, 0.0, barrier, true);
+  }
+
+  validate_local_vol_surface(spec, surface);
+  auto local_variance = [&](double spot, double tau_remaining) {
+    return surface.local_variance(spot, std::max(0.0, tau_remaining));
+  };
+  return solve_pde(spec, settings, local_variance,
+                   local_volatility_estimate(spec, surface), barrier, true);
 }
 
 } // namespace cppquant

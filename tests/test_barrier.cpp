@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <stdexcept>
+#include <vector>
 
 using namespace cppquant;
 
@@ -15,6 +16,18 @@ OptionSpec barrier_spec(OptionType type, double spot = 100.0,
   return OptionSpec{
       type,    ExerciseStyle::European, spot, strike, time, volatility, rate,
       dividend};
+}
+
+VolatilitySurface flat_surface(double spot, double rate, double volatility) {
+  std::vector<SurfaceSlice> slices;
+  for (const double time : {0.25, 0.5, 1.0, 2.0}) {
+    const SviParameters parameters{volatility * volatility * time, 0.0, 0.0,
+                                   0.0, 0.1};
+    slices.push_back(
+        SurfaceSlice{SviSlice{spot * std::exp(rate * time), time, parameters},
+                     std::exp(-rate * time)});
+  }
+  return VolatilitySurface(std::move(slices));
 }
 
 } // namespace
@@ -143,4 +156,23 @@ TEST(barrier_rejects_invalid_inputs) {
   settings.space_steps = 5;
   CHECK_THROW(crank_nicolson_down_and_out_price(call, 80.0, settings),
               std::invalid_argument);
+}
+
+TEST(local_vol_barrier_pde_matches_flat_surface_analytic) {
+  const VolatilitySurface surface = flat_surface(100.0, 0.05, 0.2);
+  PdeSettings settings;
+  settings.space_steps = 600;
+  settings.time_steps = 600;
+
+  for (const auto type : {OptionType::Call, OptionType::Put}) {
+    for (const double barrier : {80.0, 95.0}) {
+      const OptionSpec spec =
+          barrier_spec(type, 100.0, 100.0, 1.0, 0.2, 0.05, 0.0);
+      const double analytic = down_and_out_price(spec, barrier);
+      const auto pde = crank_nicolson_local_vol_down_and_out_price(
+          spec, surface, barrier, settings);
+      CHECK_NEAR(pde.price, analytic, 2e-3);
+      CHECK_EQ(pde.clamped_local_variance_points, 0u);
+    }
+  }
 }

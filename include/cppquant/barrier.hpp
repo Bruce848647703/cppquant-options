@@ -29,6 +29,12 @@ PdeResult crank_nicolson_down_and_out_price(const OptionSpec& spec,
                                             double barrier,
                                             const PdeSettings& settings = {});
 
+/// Local-volatility down-and-out PDE. The barrier is the exact lower grid
+/// boundary, and the diffusion comes from `surface.local_variance`.
+PdeResult crank_nicolson_local_vol_down_and_out_price(
+    const OptionSpec& spec, const VolatilitySurface& surface, double barrier,
+    const PdeSettings& settings = {});
+
 /// Check the common validation rules for a down-and-out barrier.
 void validate_down_and_out(const OptionSpec& spec, double barrier);
 

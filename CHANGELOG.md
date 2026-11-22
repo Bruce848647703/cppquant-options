@@ -52,6 +52,8 @@ All notable changes to this project are documented here.
 - Barrier Greek tests for expired options, a zero-volatility knock-out and a
   spot close to the barrier; removed an unreachable one-sided vega branch.
 - PDE coverage for a down-and-out call whose barrier is above the strike.
+- `crank_nicolson_local_vol_down_and_out_price`, combining the barriered grid
+  with Dupire local variance; flat-surface regression test and docs.
 - Final release benchmark refresh, package version 0.5.0, and release notes
   covering SVI, surfaces, LSM, PDE, local volatility and barriers.
 
